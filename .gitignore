@@ -1,0 +1,12 @@
+.env
+*.key
+.kaggle/
+kaggle.json
+__pycache__/
+*.pyc
+.venv/
+checkpoints/
+# never commit generated attack strings
+results/**/prompts_*
+results/**/*jailbreak*
+paper/build/

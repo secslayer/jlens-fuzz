@@ -1,0 +1,117 @@
+# experiments.yaml — the orchestration source of truth.
+# Each job: id, lane (core|extended), needs (dep job ids), produces (file that proves it's done),
+# cmd (what run_experiment.py runs). The controller reads this to compute what to run next and
+# is fully RESUMABLE: it infers status from `produces` existing on disk, so a dead Kaggle session
+# never loses your place. CORE lane = the 1-week preprint. EXTENDED = the fuller paper, later.
+
+defaults:
+  config: configs/exp.yaml
+
+jobs:
+  # ---- signal extraction (Components 2) ----
+  probes:                       # logistic refusal probe -> FITNESS classifier
+    lane: core
+    needs: []
+    produces: results/probes/best_layer.json
+    cmd: "python scripts/train_probes.py --config {config} --out results/probes"
+
+  direction:                    # difference-in-means refusal direction -> TOKEN ATTRIBUTION (where to mutate)
+    lane: core
+    needs: []
+    produces: results/direction.npz
+    cmd: "python scripts/extract_direction.py --config {config} --out results/direction.npz"
+
+  validate:                     # RQ-evidence + sanity gate: does the signal correlate with real refusal?
+    lane: core
+    needs: [probes, direction]
+    produces: results/validate_signal.json
+    cmd: "python scripts/validate_signal.py --config {config}"
+
+  # ---- baselines (identical conditions; see CLAUDE.md rule 3) ----
+  gptfuzzer:                    # black-box control (no internal signal) — RQ1 denominator
+    lane: core
+    needs: []
+    produces: results/gptfuzzer.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method gptfuzzer"
+
+  autodan:
+    lane: extended
+    needs: []
+    produces: results/autodan.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method autodan"
+
+  amnesia:                      # activation-steering baseline (2603.10080)
+    lane: extended
+    needs: [direction]
+    produces: results/amnesia.json
+    cmd: "python scripts/run_amnesia.py --config {config}"
+
+  # ---- our method + ablations (Components 1,3,4) ----
+  ours:                         # guided-span mutation + probe/activation fitness, human seeds
+    lane: core
+    needs: [probes, direction]
+    produces: results/ours.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge+act"
+
+  abl_mut_uniform:              # RQ1 isolation: same loop, mutate WHOLE prompt (not the attributed span)
+    lane: core
+    needs: [probes, direction]
+    produces: results/abl_mut_uniform.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation uniform --seedtier human --fitness judge+act"
+
+  abl_seed_bootstrap:           # RQ2 seed tier (b): model-bootstrapped seeds
+    lane: core
+    needs: [probes, direction]
+    produces: results/abl_seed_bootstrap.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier bootstrap --fitness judge+act"
+
+  abl_seed_random:              # RQ2 seed tier (c): random innocuous seeds (the hardest, headline)
+    lane: core
+    needs: [probes, direction]
+    produces: results/abl_seed_random.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier random --fitness judge+act"
+
+  abl_fitness_judgeonly:        # Component 4 isolation: drop the activation term
+    lane: extended
+    needs: [probes, direction]
+    produces: results/abl_fitness_judgeonly.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge"
+
+  # ---- transfer (RQ3) — all LOCAL on Kaggle, no external API ----
+  transfer_local:               # replay optimized prompts on a 2nd small model (cross-family)
+    lane: core
+    needs: [ours]
+    produces: results/transfer_local.json
+    cmd: "python scripts/transfer_blackbox.py --config {config} --from results/ours.json --local"
+
+  transfer_extra:               # a third target for a broader transfer table
+    lane: extended
+    needs: [ours]
+    produces: results/transfer_extra.json
+    cmd: "python scripts/transfer_blackbox.py --config {config} --from results/ours.json --local --target Qwen/Qwen2.5-1.5B-Instruct"
+
+  # ---- defenses (RQ4) ----
+  defense_ppl:
+    lane: extended
+    needs: [ours]
+    produces: results/defense_ppl.json
+    cmd: "python scripts/eval_defense.py --config {config} --defense perplexity --from results/ours.json"
+
+  defense_smoothllm:
+    lane: extended
+    needs: [ours]
+    produces: results/defense_smoothllm.json
+    cmd: "python scripts/eval_defense.py --config {config} --defense smoothllm --from results/ours.json"
+
+  # ---- reporting ----
+  figures:
+    lane: core
+    needs: [ours, gptfuzzer, abl_mut_uniform, abl_seed_bootstrap, abl_seed_random, transfer_local, validate]
+    produces: results/figures/DONE
+    cmd: "python scripts/make_figures.py --results results --out results/figures"
+
+  paper:
+    lane: core
+    needs: [figures]
+    produces: paper/main.pdf
+    cmd: "python scripts/assemble_paper.py --results results --out paper"

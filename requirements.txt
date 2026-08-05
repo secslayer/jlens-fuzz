@@ -1,0 +1,12 @@
+torch>=2.2
+transformers>=4.44
+accelerate>=0.30
+datasets>=2.19
+scikit-learn>=1.4
+numpy>=1.26
+pandas>=2.2
+pyyaml>=6.0
+matplotlib>=3.8
+joblib>=1.4
+huggingface_hub>=0.23
+openai>=1.30          # OpenRouter-compatible client for the K3 transfer experiment

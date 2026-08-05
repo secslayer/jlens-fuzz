@@ -1,0 +1,28 @@
+# Single source of truth. Baselines and our method MUST share these invariants.
+seed: 0
+
+# White-box target you can actually run (ungated, ~6GB in fp16).
+target_model: "Qwen/Qwen2.5-3B-Instruct"       # swap to meta-llama/Llama-3.2-3B-Instruct if desired
+
+# Success judge (original GPTFuzzer RoBERTa judge — keeps comparability).
+judge_model: "hubert233/GPTFuzz"
+
+# Benchmark subset.
+benchmark: "walledai/AdvBench"
+n_behaviors: 50
+smoke_behaviors: 5
+
+# Fuzzing budget — IDENTICAL across all methods for a fair comparison.
+query_budget: 50            # full-generation queries per behavior
+max_iterations: 100
+mutate_model: "Qwen/Qwen2.5-3B-Instruct"   # local mutator to avoid API cost
+decode_temperature: 0.7
+decode_top_p: 0.9
+
+# Probe / fitness.
+probe_batch_size: 16
+partial_forward: true       # score candidates by partial forward pass to the probe layer
+
+# Cross-model transfer target — a SECOND small open-weight model, run locally on Kaggle.
+# No external API. Cross-family (Phi vs Qwen) makes the transfer claim stronger; ungated + fits a T4.
+transfer_target_local: "microsoft/Phi-3.5-mini-instruct"
