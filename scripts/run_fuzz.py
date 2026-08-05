@@ -341,86 +341,92 @@ def find_attribution_span(template, model, tok, directions, dir_layer_idx, devic
     per-token projection onto the refusal direction, or None on any degenerate/failure case (the
     caller falls back to uniform mutation).
     """
+    # The ENTIRE body is inside this one try/except, on purpose: attribution is a heuristic
+    # helper for guided mutation, not a correctness-critical path, so ANY failure anywhere in
+    # here (tokenizer quirks, a shape mismatch, an out-of-range index, a CUDA hiccup, ...) must
+    # degrade to the uniform-mutation fallback rather than crash the whole fuzzing run. An
+    # earlier version only wrapped the tokenizer call, which let an offset_mapping KeyError
+    # escape and take down a real Kaggle run -- do not narrow this try again.
     try:
         enc = tok(template, return_tensors="pt", truncation=True, max_length=max_len,
                    return_offsets_mapping=True)
         # HF tokenizers return the key "offset_mapping" (singular "offset") even though the
-        # kwarg above is "return_offsetS_mapping" (plural) -- easy to typo, and this pop() must
-        # stay inside the try so a key/shape mismatch degrades to the uniform-mutation fallback
-        # below instead of crashing the whole fuzzing run (this bit a real Kaggle run once).
+        # kwarg above is "return_offsetS_mapping" (plural) -- easy to typo.
         offsets = enc.pop("offset_mapping")[0].tolist()  # [T, 2] char spans per token
-    except Exception as e:  # noqa: BLE001 - never crash the loop over an attribution failure
-        log.warning(f"tokenization with offsets failed ({e}); falling back to uniform mutation")
-        return None
-    enc = enc.to(device)
-    out = model(**enc, output_hidden_states=True)
-    hs = torch.stack(out.hidden_states[1:], dim=0)  # [L, 1, T, H]
-    n_layers = hs.shape[0]
-    if dir_layer_idx >= n_layers:
-        log.warning(
-            f"direction layer idx {dir_layer_idx} out of range for {n_layers}-layer model; "
-            f"falling back to uniform mutation"
-        )
-        return None
-    layer_hidden = hs[dir_layer_idx, 0].float().cpu().numpy()  # [T, H]
-    scores = layer_hidden @ directions[dir_layer_idx]  # [T]
-    n_tokens = len(scores)
+        enc = enc.to(device)
+        out = model(**enc, output_hidden_states=True)
+        hs = torch.stack(out.hidden_states[1:], dim=0)  # [L, 1, T, H]
+        n_layers = hs.shape[0]
+        if dir_layer_idx >= n_layers:
+            log.warning(
+                f"direction layer idx {dir_layer_idx} out of range for {n_layers}-layer model; "
+                f"falling back to uniform mutation"
+            )
+            return None
+        layer_hidden = hs[dir_layer_idx, 0].float().cpu().numpy()  # [T, H]
+        scores = layer_hidden @ directions[dir_layer_idx]  # [T]
+        n_tokens = len(scores)
 
-    marker_start = template.find(MARKER)
-    if marker_start == -1:
-        marker_char_span = None
-    else:
-        marker_char_span = (marker_start, marker_start + len(MARKER))
+        marker_start = template.find(MARKER)
+        if marker_start == -1:
+            marker_char_span = None
+        else:
+            marker_char_span = (marker_start, marker_start + len(MARKER))
 
-    excluded = set()
-    if marker_char_span is not None:
-        for i, (a, b) in enumerate(offsets):
-            if a == b:  # special/padding token with empty span
-                continue
-            if a < marker_char_span[1] and b > marker_char_span[0]:
-                excluded.add(i)
+        excluded = set()
+        if marker_char_span is not None:
+            for i, (a, b) in enumerate(offsets):
+                if a == b:  # special/padding token with empty span
+                    continue
+                if a < marker_char_span[1] and b > marker_char_span[0]:
+                    excluded.add(i)
 
-    valid_mask = [i not in excluded and offsets[i][0] != offsets[i][1] for i in range(n_tokens)]
-    if not any(valid_mask):
-        log.warning("no non-marker tokens available for attribution; falling back to uniform mutation")
-        return None
+        valid_mask = [i not in excluded and offsets[i][0] != offsets[i][1] for i in range(n_tokens)]
+        if not any(valid_mask):
+            log.warning(
+                "no non-marker tokens available for attribution; falling back to uniform mutation"
+            )
+            return None
 
-    # Build maximal contiguous runs of valid (non-excluded, real) token indices. Any excluded
-    # token (marker or its overlap) breaks contiguity, so a sliding window is NEVER allowed to
-    # straddle the marker gap -- it must stay entirely on one side.
-    segments = []
-    current = []
-    for i in range(n_tokens):
-        if valid_mask[i]:
-            current.append(i)
-        elif current:
+        # Build maximal contiguous runs of valid (non-excluded, real) token indices. Any excluded
+        # token (marker or its overlap) breaks contiguity, so a sliding window is NEVER allowed to
+        # straddle the marker gap -- it must stay entirely on one side.
+        segments = []
+        current = []
+        for i in range(n_tokens):
+            if valid_mask[i]:
+                current.append(i)
+            elif current:
+                segments.append(current)
+                current = []
+        if current:
             segments.append(current)
-            current = []
-    if current:
-        segments.append(current)
 
-    best_sum, best_window = None, None
-    for segment in segments:
-        window = min(MUTATE_WINDOW_TOKENS, len(segment))
-        if window < 1:
-            continue
-        for start in range(0, len(segment) - window + 1):
-            idxs = segment[start:start + window]
-            s = float(np.sum(scores[idxs]))
-            if best_sum is None or s > best_sum:
-                best_sum, best_window = s, idxs
+        best_sum, best_window = None, None
+        for segment in segments:
+            window = min(MUTATE_WINDOW_TOKENS, len(segment))
+            if window < 1:
+                continue
+            for start in range(0, len(segment) - window + 1):
+                idxs = segment[start:start + window]
+                s = float(np.sum(scores[idxs]))
+                if best_sum is None or s > best_sum:
+                    best_sum, best_window = s, idxs
 
-    if best_window is None:
-        log.warning("template shorter than mutation window; falling back to uniform mutation")
+        if best_window is None:
+            log.warning("template shorter than mutation window; falling back to uniform mutation")
+            return None
+
+        char_start = min(offsets[i][0] for i in best_window)
+        char_end = max(offsets[i][1] for i in best_window)
+        span_text = template[char_start:char_end]
+        if not span_text.strip():
+            log.warning("degenerate empty attribution span; falling back to uniform mutation")
+            return None
+        return span_text
+    except Exception as e:  # noqa: BLE001 - never crash the loop over an attribution failure
+        log.warning(f"token-attribution span selection failed ({e}); falling back to uniform mutation")
         return None
-
-    char_start = min(offsets[i][0] for i in best_window)
-    char_end = max(offsets[i][1] for i in best_window)
-    span_text = template[char_start:char_end]
-    if not span_text.strip():
-        log.warning("degenerate empty attribution span; falling back to uniform mutation")
-        return None
-    return span_text
 
 
 # ---------------------------------------------------------------------------------------------
