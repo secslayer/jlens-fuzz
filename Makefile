@@ -40,7 +40,7 @@ paper:
 	$(PY) scripts/run_experiment.py --job paper
 
 test:
-	$(PY) -m pytest -q || echo "(no tests yet)"
+	$(PY) -m pytest -q
 
 clean:
 	rm -rf results/figures paper/build logs __pycache__ scripts/__pycache__

@@ -9,4 +9,3 @@ pyyaml>=6.0
 matplotlib>=3.8
 joblib>=1.4
 huggingface_hub>=0.23
-openai>=1.30          # OpenRouter-compatible client for the K3 transfer experiment
