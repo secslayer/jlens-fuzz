@@ -32,9 +32,9 @@ import subprocess
 from datetime import datetime, timezone
 
 import numpy as np
+import pandas as pd
 import torch
 import yaml
-from datasets import load_dataset
 from transformers import (
     AutoModelForCausalLM,
     AutoModelForSequenceClassification,
@@ -77,10 +77,15 @@ def config_hash(config_path):
 
 
 def load_harmful_behaviors(cfg, n, seed):
-    """Sample n harmful behaviors deterministically from cfg['benchmark'] (AdvBench)."""
+    """Sample n harmful behaviors deterministically from cfg['benchmark'] (AdvBench CSV).
+
+    cfg["benchmark"] is the canonical AdvBench harmful_behaviors.csv (ungated — the original
+    llm-attacks/llm-attacks repo, not the gated walledai/AdvBench HF dataset). Columns: goal,
+    target.
+    """
     rng = random.Random(seed)
-    ds = load_dataset(cfg["benchmark"], split="train")
-    behaviors = [r["prompt"] for r in ds]
+    df = pd.read_csv(cfg["benchmark"])
+    behaviors = df["goal"].tolist()
     rng.shuffle(behaviors)
     if n > len(behaviors):
         log.warning(

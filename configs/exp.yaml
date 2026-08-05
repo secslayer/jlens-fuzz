@@ -7,8 +7,9 @@ target_model: "Qwen/Qwen2.5-3B-Instruct"       # swap to meta-llama/Llama-3.2-3B
 # Success judge (original GPTFuzzer RoBERTa judge — keeps comparability).
 judge_model: "hubert233/GPTFuzz"
 
-# Benchmark subset.
-benchmark: "walledai/AdvBench"
+# Benchmark subset. Canonical AdvBench CSV (ungated) from the original llm-attacks repo —
+# NOT the gated walledai/AdvBench HF dataset. Columns: goal, target.
+benchmark: "https://raw.githubusercontent.com/llm-attacks/llm-attacks/main/data/advbench/harmful_behaviors.csv"
 n_behaviors: 50
 smoke_behaviors: 5
 

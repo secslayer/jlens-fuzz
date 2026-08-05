@@ -20,6 +20,7 @@ import json
 import os
 import random
 import numpy as np
+import pandas as pd
 import torch
 import yaml
 from datasets import load_dataset
@@ -35,13 +36,18 @@ def set_seed(s):
         torch.cuda.manual_seed_all(s)
 
 
-def load_instructions(n_per_class, seed):
-    """Return (texts, labels): harmful=1, harmless=0. Uses public datasets only."""
+def load_instructions(benchmark, n_per_class, seed):
+    """Return (texts, labels): harmful=1, harmless=0. Uses public datasets only.
+
+    `benchmark` is cfg["benchmark"] — the canonical AdvBench harmful_behaviors.csv (ungated,
+    from the original llm-attacks/llm-attacks repo, not the gated walledai/AdvBench HF dataset).
+    Columns: goal, target.
+    """
     rng = random.Random(seed)
 
     # Harmful: AdvBench behaviors (public red-teaming benchmark).
-    adv = load_dataset("walledai/AdvBench", split="train")
-    harmful = [r["prompt"] for r in adv]
+    adv = pd.read_csv(benchmark)
+    harmful = adv["goal"].tolist()
     rng.shuffle(harmful)
     harmful = harmful[:n_per_class]
 
@@ -110,7 +116,7 @@ def main():
         model_id, torch_dtype=torch.float16 if device == "cuda" else torch.float32,
     ).to(device).eval()
 
-    texts, labels = load_instructions(args.n_per_class, cfg.get("seed", 0))
+    texts, labels = load_instructions(cfg["benchmark"], args.n_per_class, cfg.get("seed", 0))
     y = np.array(labels)
     print(f"[probes] extracting features for {len(texts)} prompts")
     X = extract_layer_features(model, tok, texts, device,
