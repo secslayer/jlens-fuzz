@@ -16,9 +16,13 @@ Human gate (PLAN.md Stage 2): require best-layer held-out AUC >= 0.85, and hand-
 novel prompts, before building anything on top of this.
 """
 import argparse
+import hashlib
 import json
 import os
 import random
+import subprocess
+from datetime import datetime, timezone
+
 import numpy as np
 import pandas as pd
 import torch
@@ -34,6 +38,23 @@ def set_seed(s):
     random.seed(s); np.random.seed(s); torch.manual_seed(s)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(s)
+
+
+def git_sha():
+    sha = os.environ.get("JLENS_GIT")
+    if sha:
+        return sha
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"]
+        ).decode().strip()
+    except Exception:  # noqa: BLE001 - provenance must never crash the run
+        return "nogit"
+
+
+def config_hash(config_path):
+    with open(config_path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()[:16]
 
 
 def load_instructions(benchmark, n_per_class, seed):
@@ -143,8 +164,17 @@ def main():
     # Refit best-layer probe on all data and save weights for the loop.
     bl = best["layer"] - 1
     clf = LogisticRegression(max_iter=2000, C=1.0).fit(X[:, bl, :], y)
+
+    provenance = {
+        "git_sha": git_sha(),
+        "job": os.environ.get("JLENS_JOB", "probes"),
+        "config_hash": config_hash(args.config),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
     np.savez(os.path.join(args.out, "probe_best_layer.npz"),
-             coef=clf.coef_, intercept=clf.intercept_, layer=best["layer"])
+             coef=clf.coef_, intercept=clf.intercept_, layer=best["layer"],
+             provenance=json.dumps(provenance))
 
     summary = {
         "model": model_id,
@@ -154,6 +184,7 @@ def main():
         "passes_gate": bool(best["auc"] >= args.auc_threshold),
         "per_layer": per_layer,
         "n_per_class": args.n_per_class,
+        "_provenance": provenance,
     }
     json.dump(summary, open(os.path.join(args.out, "best_layer.json"), "w"), indent=2)
 
