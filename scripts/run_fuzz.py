@@ -608,6 +608,18 @@ def run_behavior(behavior_idx, behavior, seed_templates, cfg, args, device,
                 behavior_full_passes += 1
                 counters["wall_clock_full_s"] += time.perf_counter() - t1
             else:
+                # KNOWN, EXPECTED, DO NOT "FIX": this proxy reward is built on the Stage 2
+                # probe signal, which reviews/stage2-human-signoff.md PROVED does not generalize
+                # -- it scored 0.5 (chance) on 6 novel hand-written prompts, inverted relative to
+                # its own 1.0 held-out-AUC training performance. That means (1.0 - probe_score)
+                # is not a trustworthy "how promising is this candidate" estimate off-distribution,
+                # so `abl_fitness_probeact` (the only job that reaches this branch --
+                # experiments.yaml demoted judge+act out of the core lane for exactly this reason)
+                # is EXPECTED to underperform plain judge-only `ours`. That is the correct,
+                # already-documented finding, not a regression to patch. Re-enabling this branch
+                # as a core default requires re-running scripts/train_probes.py +
+                # scripts/probe_novel_check.py clean first (tracked:
+                # https://github.com/secslayer/jlens-fuzz/issues/2).
                 reward = 1.0 - probe_score
                 cand_success = False
                 cost_type = "partial"
@@ -629,6 +641,14 @@ def run_behavior(behavior_idx, behavior, seed_templates, cfg, args, device,
 
         if cand_success:
             success = True
+            # NOTE: this counts only FULL (generate+judge) passes, never partial-only proxy
+            # iterations. Under --fitness judge, every iteration is a full pass, so this is a
+            # true query count. Under --fitness judge+act, most iterations are partial-only (the
+            # probe elite gate skips the full judge call), so queries_to_success under-counts
+            # total iterations spent -- it is NOT directly comparable across --fitness modes.
+            # Fine for the core matrix (all core jobs use --fitness judge, see experiments.yaml),
+            # but flag this explicitly before ever comparing queries_to_success between `ours`
+            # and `abl_fitness_probeact` as an efficiency metric.
             queries_to_success = behavior_full_passes
             log.info(
                 f"behavior {behavior_idx}: SUCCESS at iteration {iteration} "
@@ -815,6 +835,10 @@ def main():
         "asr": asr,
         "asr_human_subset": None,  # populated later by Gate 5's human validation pass
         "queries_to_success": {
+            # Counts FULL (generate+judge) passes only -- see run_behavior()'s success branch.
+            # NOT directly comparable between --fitness judge and judge+act (the latter has many
+            # partial-only iterations this count never sees). Fine within the all-judge core
+            # matrix; flag before any cross-fitness efficiency comparison.
             "per_behavior": per_behavior_queries,
             "median": median_q,
         },
