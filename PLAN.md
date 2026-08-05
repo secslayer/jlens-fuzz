@@ -275,3 +275,26 @@ loses your results.
 - [ ] `CITATION.cff` so GitHub shows "Cite this repository".
 - [ ] All 4 prior works cited and distinguished; closest competitor named in the abstract's
       differentiation sentence.
+
+## 10. Future work / planned extensions
+
+**Not scheduled yet — do not start before the core lane (Stages 0–7) is done and reviewed.**
+
+- **Target-difficulty axis (serves RQ3).** Once the core matrix works end-to-end on
+  `Qwen2.5-3B-Instruct`, extend RQ3 beyond single-target transfer by running the full method
+  directly (white-box) on progressively harder, more safety-tuned open-weight targets —
+  `Llama-3.1-8B-Instruct`, then `Gemma-2-9B-it` — and report ASR as a function of target
+  robustness. This is a genuine additional axis, not a rerun of the existing
+  `transfer_target_local` black-box replay: each new target gets its own probes/direction
+  extraction and its own full fuzzing run, since the method is white-box and needs activations
+  from the model actually being attacked.
+  - **Scope boundary:** all targets stay open-weight. Closed/API-only models are out of scope by
+    threat model — the method requires activation access, so it cannot target a closed API
+    regardless of interest.
+  - **Config-driven, not hardcoded:** implement by swapping `configs/exp.yaml`'s `target_model`
+    (same pattern already used for the model swap comment at the top of that file) and re-running
+    the `probes → direction → validate → ours` chain per target — do not special-case new target
+    strings inside any script.
+  - Belongs in the EXTENDED lane once picked up (see `ORCHESTRATION.md`'s core/extended split);
+    likely a new `experiments.yaml` job family (e.g. `ours_llama8b`, `ours_gemma9b`) parameterized
+    by target rather than a new script.
