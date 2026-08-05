@@ -77,3 +77,19 @@ regressions were found. Two non-blocking hygiene issues are logged below under "
    locally to review from. This is explicitly **out of Stage 0's gate** and does not block this
    verdict, but should not be treated as "Stage 1 done" — flagging per the task's own framing so
    it isn't silently skipped.
+
+## Corrections (2026-08-05)
+
+- **Item 2 above (`0a97e0f` message mismatch) — confirmed and closed.** `git show 0a97e0f --stat`
+  shows the commit touched only `reviews/stage0.md` (the prior review report); the message
+  ("fix: train_probes.py reads AdvBench from cfg[benchmark], single source of truth") was a
+  copy-paste artifact carried over from drafting the actual fix, not a description of that
+  commit's own diff. The real code change — `load_instructions()` taking `benchmark` as a param
+  and the call site passing `cfg["benchmark"]` — landed in `7e7c2b9`, confirmed via
+  `git show 7e7c2b9 -- scripts/train_probes.py`. No functional or security impact; the code at
+  HEAD is correct. Going forward: verify a commit's message matches `git diff --stat` (or
+  `git show --stat`) for that exact commit before committing, not the commit being drafted
+  alongside it.
+- **Item 1 above (`pytest` missing from `requirements.txt`) — fixed.** See `requirements.txt`;
+  `pytest` is now a direct dependency so `make setup && make test` is self-contained for a fresh
+  contributor without relying on CI's separate `pip install pytest pyyaml` step.
