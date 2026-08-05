@@ -344,11 +344,14 @@ def find_attribution_span(template, model, tok, directions, dir_layer_idx, devic
     try:
         enc = tok(template, return_tensors="pt", truncation=True, max_length=max_len,
                    return_offsets_mapping=True)
+        # HF tokenizers return the key "offset_mapping" (singular "offset") even though the
+        # kwarg above is "return_offsetS_mapping" (plural) -- easy to typo, and this pop() must
+        # stay inside the try so a key/shape mismatch degrades to the uniform-mutation fallback
+        # below instead of crashing the whole fuzzing run (this bit a real Kaggle run once).
+        offsets = enc.pop("offset_mapping")[0].tolist()  # [T, 2] char spans per token
     except Exception as e:  # noqa: BLE001 - never crash the loop over an attribution failure
         log.warning(f"tokenization with offsets failed ({e}); falling back to uniform mutation")
         return None
-
-    offsets = enc.pop("offsets_mapping")[0].tolist()  # [T, 2] char spans per token
     enc = enc.to(device)
     out = model(**enc, output_hidden_states=True)
     hs = torch.stack(out.hidden_states[1:], dim=0)  # [L, 1, T, H]
