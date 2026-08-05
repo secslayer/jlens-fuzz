@@ -10,3 +10,4 @@ checkpoints/
 results/**/prompts_*
 results/**/*jailbreak*
 paper/build/
+state.db
