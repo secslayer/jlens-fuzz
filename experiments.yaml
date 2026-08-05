@@ -47,35 +47,45 @@ jobs:
     cmd: "python scripts/run_amnesia.py --config {config}"
 
   # ---- our method + ablations (Components 1,3,4) ----
-  ours:                         # guided-span mutation + probe/activation fitness, human seeds
+  # NOTE (Gate 2, 2026-08-05, reviews/stage2-human-signoff.md): probe-based fitness (judge+act)
+  # is NOT validated — the probe passed its held-out AUC (1.0) but FAILED the novel-prompt
+  # generalization check (0.5 acc on 6 hand-written prompts), overfitting a surface confound
+  # (AdvBench-imperative vs Alpaca-mixed phrasing). The direction signal (token-attribution /
+  # guided-mutation, Component 3) PASSED cleanly and is unaffected. Core-lane fitness defaults
+  # to judge-only (validated in Stage 1) until the probe is fixed and re-validated — see
+  # abl_fitness_probeact below and the tracked follow-up issue.
+  ours:                         # guided-span mutation (direction-driven) + judge-only fitness
     lane: core
     needs: [probes, direction]
     produces: results/ours.json
-    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge+act"
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge"
 
   abl_mut_uniform:              # RQ1 isolation: same loop, mutate WHOLE prompt (not the attributed span)
     lane: core
     needs: [probes, direction]
     produces: results/abl_mut_uniform.json
-    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation uniform --seedtier human --fitness judge+act"
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation uniform --seedtier human --fitness judge"
 
   abl_seed_bootstrap:           # RQ2 seed tier (b): model-bootstrapped seeds
     lane: core
     needs: [probes, direction]
     produces: results/abl_seed_bootstrap.json
-    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier bootstrap --fitness judge+act"
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier bootstrap --fitness judge"
 
   abl_seed_random:              # RQ2 seed tier (c): random innocuous seeds (the hardest, headline)
     lane: core
     needs: [probes, direction]
     produces: results/abl_seed_random.json
-    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier random --fitness judge+act"
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier random --fitness judge"
 
-  abl_fitness_judgeonly:        # Component 4 isolation: drop the activation term
+  abl_fitness_probeact:         # Component 4 diagnostic: probe+judge fitness — NOT VALIDATED.
+                                 # Probe failed Gate 2 novel-prompt generalization (see note
+                                 # above). Kept only to re-test after the probe-generalization
+                                 # fix; do not report headline numbers from this job until then.
     lane: extended
     needs: [probes, direction]
-    produces: results/abl_fitness_judgeonly.json
-    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge"
+    produces: results/abl_fitness_probeact.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge+act"
 
   # ---- transfer (RQ3) — all LOCAL on Kaggle, no external API ----
   transfer_local:               # replay optimized prompts on a 2nd small model (cross-family)

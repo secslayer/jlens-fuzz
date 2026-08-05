@@ -57,6 +57,14 @@ keep both:
 
 That split is exactly Components 2→3→4 of the pasted plan, made concrete.
 
+> **Gate 2 update (2026-08-05, `reviews/stage2-human-signoff.md`):** the probe passed its
+> held-out AUC (1.0) but **failed the novel-prompt generalization check** (0.5 acc on 6
+> hand-written prompts — overfit an AdvBench-imperative-vs-Alpaca-mixed surface confound). The
+> direction signal passed cleanly. `experiments.yaml`'s core lane therefore defaults `run_fuzz.py`
+> to `--fitness judge` (not `judge+act`) until the probe is fixed and re-validated; `judge+act`
+> lives only in the extended-lane `abl_fitness_probeact` diagnostic. Guided mutation (direction-
+> driven) is unaffected and stays the core default.
+
 ## Script interfaces (what `builder` must implement)
 
 The manifest calls these with specific flags — argparse must match:
