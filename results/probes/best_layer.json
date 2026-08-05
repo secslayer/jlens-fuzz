@@ -186,5 +186,11 @@
       "acc": 1.0
     }
   ],
-  "n_per_class": 300
+  "n_per_class": 300,
+  "_provenance": {
+    "git_sha": "b64f59c",
+    "job": "probes",
+    "config_hash": "605032769f74b171",
+    "timestamp": "2026-08-05T12:32:19.248072+00:00"
+  }
 }
