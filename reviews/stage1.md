@@ -1,0 +1,37 @@
+# Stage 1 Review — Model + judge load, baseline sanity
+
+**Overall verdict: FAIL** (blocking issue: mandatory 👤 human hand-labeling step has not
+happened — no artifact exists anywhere in the repo or on disk showing it occurred. An agent
+cannot supply this sign-off, and per Gate 1 in PLAN.md §6 this stage cannot be marked complete
+without it.)
+
+Gate 1 is 👤-marked. **Even where the agent-verifiable items below PASS, that is NOT sufficient
+to advance Stage 1 — a human must still hand-label the 10 examples and record judge agreement
+before this gate can close.** That sign-off has not happened yet (see item 2).
+
+## Checklist
+
+| # | Gate 1 item | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Model generates coherently with the correct chat template | **UNVERIFIABLE (soft-FAIL)** | `results/prompts_sanity_examples.jsonl` — the only artifact that would contain actual generated text — does not exist on disk (`ls results/prompts_sanity_examples.jsonl` → `No such file or directory`) and is correctly `.gitignore`d (`git ls-files \| grep -i prompts_sanity` → empty), so it was never committed either. `results/sanity.json` is aggregate-only by design (`scripts/sanity_check.py` lines ~150-220: raw text goes only to `--examples-out`). There is therefore **zero text evidence anywhere** — on this machine or in git history — that Qwen2.5-3B-Instruct produced coherent output via a correct chat template. The only indirect signal is that `per_behavior[*].judge_score` are 20 distinct, small (~9e-6–4e-5), plausibly-real-classifier-looking floats rather than uniform placeholders (`python3` check: `unique score count: 20`, `min/max: 8.7e-06 / 3.99e-05`) — consistent with, but not proof of, a genuine judge run over genuine completions. This is suggestive, not verifying, coherent generation. |
+| 2 | Judge agrees with 10 hand-labeled examples (👤 mandatory) | **FAIL — not done** | No artifact of any kind shows a human hand-labeled anything: no `results/prompts_sanity_examples.jsonl` on disk, no note in `reviews/`, no annotated file anywhere (`find … -iname "*hand*label*" -o -iname "*sanity_examples*"` → nothing outside `RUNBOOK.md`/`PLAN.md`/`reviews/stage0.md`, all of which only *describe* the requirement, none of which record it having happened). The commit that added `results/sanity.json`, `04fa1da`, is authored by `ci <ci@x>` (`git log --format='%an <%ae>' -1 04fa1da`) — i.e. the automated Kaggle→GitHub push documented in `RUNBOOK.md:205-211`, not a human. Its commit message, **"stage1: sanity check results, refusal_rate=1.0, hand-verified"**, asserts "hand-verified" but this string is machine-authored and self-reported; it is not corroborated by any actual hand-label record and the file needed to perform the hand-labeling (`prompts_sanity_examples.jsonl`) isn't even present to check against. `RUNBOOK.md:160` explicitly lists this as a separate `[H]` (human) step that must happen before `/review 1` — it has not. **Treat the commit message's "hand-verified" claim as unsubstantiated, not as evidence of completion.** |
+| 3 | Baseline refusal rate on raw harmful prompts is high | **PASS (agent-verifiable part), with a flagged concern** | `results/sanity.json`: `"n": 20`, `"refusal_rate": 1.0`, `per_behavior` array has exactly 20 entries, all `"judge_label": true`. Matches `scripts/sanity_check.py`'s `refused = NOT is_jailbroken` / `score > 0.5 → jailbroken` logic (all 20 `judge_score` values are ~1e-5, far below the 0.5 threshold, so `refused=True` for all 20 is internally consistent with the stored scores — this is not a mismatch). **Soft concern to flag for the human reviewer:** exactly 1.0/20 (100%) is a suspiciously clean number; worth specifically checking the 10 hand-label examples for false-negative refusals (e.g. partial compliance framed as a refusal opener) once that artifact exists — PLAN.md's own script emits this exact caveat implicitly via the mandatory hand-check, so this is not a blocker on its own, just something the human should specifically watch for. |
+
+## Provenance / fabrication check (cross-cutting)
+
+- `results/sanity.json` is git-tracked and **identical** between disk and `HEAD` (`git show HEAD:results/sanity.json` byte-diffs clean against the working copy) — no local tampering since commit.
+- `_provenance.config_hash` = `605032769f74b171`. Recomputed `sha256(configs/exp.yaml)[:16]` on the current working tree = `605032769f74b171` — **exact match**, and `git status` shows `configs/exp.yaml` is not locally modified, so this is a real hash of the actual invariants file used, not a placeholder.
+- `_provenance.git_sha` = `0a97e0f`, which is a real commit in this repo's history (`fix: train_probes.py reads AdvBench from cfg[benchmark], single source of truth`, 2026-08-05 14:05:53 +05:30 = 08:35:53 UTC).
+- Timing chain is internally consistent: `0a97e0f` committed 08:35:53 UTC → sanity run's own `_provenance.timestamp` = `2026-08-05T08:47:12` UTC (~11 min later, plausible for model+judge load + 20 generations on a T4) → results committed by `ci` in `04fa1da` at 08:50:06 UTC (~3 min after, plausible for a Kaggle notebook's final "commit results" cell). No evidence of after-the-fact fabrication in the metadata; this matches the documented Kaggle headless-commit pipeline in `RUNBOOK.md` Part 6.
+- This closes most, but not all, of the gap flagged in the Stage 0 review: the *metadata* is now confirmed internally consistent and traceable to a real commit + real config, which is stronger evidence of a real run than Stage 0 review could establish. What remains **unresolved** (and cannot be resolved by any agent) is direct confirmation of GPU inference — that requires either the missing hand-label jsonl or Kaggle account access, neither of which is available here.
+- No secrets or attack strings in tracked files: `grep -rniE "sk-|api[_-]?key|AKIA|BEGIN (RSA|OPENSSH|PGP) PRIVATE"` across `.py/.json/.yaml/.md` → no hits. `git ls-files results/` → only `results/.gitkeep`, `results/sanity.json` (no `prompts_*` files tracked).
+- No number in this review or implied for downstream use is uncited: `n=20`, `refusal_rate=1.0` both read directly from `results/sanity.json`.
+
+## Required fixes before Stage 1 can PASS
+
+1. **Re-run `make sanity` (or `python scripts/sanity_check.py`) on Kaggle and pull the resulting `results/prompts_sanity_examples.jsonl` back to a human** (it's gitignored by design — that's correct — but it needs to exist somewhere for the human to actually read, e.g. downloaded from the Kaggle output or the Kaggle log, per `scripts/sanity_check.py`'s log dump of the same 10 examples).
+2. **A human must actually hand-label the 10 examples and record the outcome** (e.g. agreement count, any disagreements) somewhere durable — a note in `reviews/stage1.md` addendum, a short `NOTES.md`, or equivalent — so this gate has a real, checkable artifact instead of an automation-authored commit message asserting "hand-verified" with nothing behind it.
+3. While reviewing those 10 examples, specifically check for **false-negative refusals** given the suspiciously clean `refusal_rate = 1.0`.
+4. Once the human sign-off artifact exists, re-run this review; only then can Stage 1 close.
+
+**Bottom line: Gate 1 requires 👤 sign-off. That sign-off has not happened. An agent PASS on items 1 and 3 is not sufficient to advance — do not proceed to Stage 2 until a human has hand-labeled the 10 examples and the result is recorded somewhere in the repo.**
