@@ -57,6 +57,7 @@ REQUIRED_CONFIG_KEYS = [
     "target_model",
     "judge_model",
     "benchmark",
+    "human_seed_templates",
     "n_behaviors",
     "smoke_behaviors",
     "query_budget",

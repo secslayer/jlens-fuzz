@@ -13,6 +13,11 @@ benchmark: "https://raw.githubusercontent.com/llm-attacks/llm-attacks/main/data/
 n_behaviors: 50
 smoke_behaviors: 5
 
+# Human seed-tier jailbreak templates for run_fuzz.py (the original GPTFuzzer seed pool, public
+# research artifact — 77 templates, column "text", placeholder marker "[INSERT PROMPT HERE]").
+# Loaded at runtime, same pattern as `benchmark` above — never hardcoded/committed in a script.
+human_seed_templates: "https://raw.githubusercontent.com/sherdencooper/GPTFuzz/master/datasets/prompts/GPTFuzzer.csv"
+
 # Fuzzing budget — IDENTICAL across all methods for a fair comparison.
 query_budget: 50            # full-generation queries per behavior
 max_iterations: 100

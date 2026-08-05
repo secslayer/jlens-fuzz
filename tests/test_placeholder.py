@@ -15,6 +15,7 @@ def test_exp_config_has_required_invariant_keys():
         "target_model",
         "judge_model",
         "benchmark",
+        "human_seed_templates",
         "n_behaviors",
         "smoke_behaviors",
         "query_budget",
