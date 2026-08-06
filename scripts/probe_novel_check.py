@@ -304,6 +304,26 @@ def main():
 
     tok, model = load_target(target_model_id, device)
 
+    # AUTHORITATIVE check, not just the model-id strings above: those strings can be missing or
+    # stale, but the tensor shapes cannot lie. A wrong-target probe/direction would otherwise
+    # shape-mismatch deep inside the per-prompt matmul below -- catch it here, before the loop,
+    # with a clear message (this exact class of bug crashed a real run against Phi-4-mini).
+    target_hidden_size = model.config.hidden_size
+    if coef.shape[-1] != target_hidden_size:
+        raise SystemExit(
+            f"[probe_novel_check] FATAL: probe dimension mismatch -- {probes_path} has "
+            f"hidden_dim={coef.shape[-1]} but target model {target_model_id!r} has "
+            f"hidden_size={target_hidden_size}. --probes/--config point at DIFFERENT targets. "
+            f"Fix the paths and re-run."
+        )
+    if directions.shape[-1] != target_hidden_size:
+        raise SystemExit(
+            f"[probe_novel_check] FATAL: direction dimension mismatch -- {direction_path} has "
+            f"hidden_dim={directions.shape[-1]} but target model {target_model_id!r} has "
+            f"hidden_size={target_hidden_size}. --direction/--config point at DIFFERENT "
+            f"targets. Fix the paths and re-run."
+        )
+
     probe_scores, direction_scores, my_labels = [], [], []
     for i, p in enumerate(prompts):
         prompt_text = p["text"]

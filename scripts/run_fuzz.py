@@ -8,8 +8,16 @@ vs. judge+partial-forward-probe from scripts/train_probes.py). Seed-tier source 
 RQ2) is a third independent axis.
 
 Consumes, lazily and only when the selected flags actually need them:
-  - results/probes/probe_best_layer.npz   (scripts/train_probes.py)   -- only for --fitness judge+act
-  - results/direction.npz                 (scripts/extract_direction.py) -- only for --mutation guided
+  - <probes path>    (scripts/train_probes.py)      -- only for --fitness judge+act
+  - <direction path> (scripts/extract_direction.py) -- only for --mutation guided
+  --probes/--direction default to results/probes/probe_best_layer.npz and results/direction.npz
+  for configs/exp.yaml (the Qwen tier); for configs/exp_<tag>.yaml they default to
+  results/<tag>/probes/probe_best_layer.npz and results/<tag>/direction.npz instead (see
+  derive_target_paths()) -- --config alone selects the right files for ANY target. Both are
+  dimension-checked against the loaded target model's hidden_size before the run starts and
+  FAIL LOUDLY on mismatch (a wrong-target file would otherwise shape-mismatch inside the
+  per-candidate loop and silently fall back to uniform mutation every time, producing an
+  invalid "ours" result indistinguishable from a real one -- this happened once, see git log).
 
 Produces:
   - results/<derived>.json (git-tracked, AGGREGATE-ONLY scalars, PLAN.md Section 7 schema)
@@ -30,6 +38,7 @@ import logging
 import math
 import os
 import random
+import re
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -130,13 +139,58 @@ def require_upstream_file(path, job_name):
         )
 
 
+def derive_target_paths(config_path, probes_arg, direction_arg):
+    """Derive default --probes/--direction paths from --config so this works on ANY target
+    without the caller having to remember to keep --config/--probes/--direction manually in
+    sync. Forgetting to override --probes/--direction when switching --config silently mixes
+    one target's config with another target's probe/direction weights -- this is exactly what
+    invalidated an early Phi-4-mini smoke run (guided mutation loaded Qwen's 2048-dim direction
+    against a 3072-dim Phi model, shape-mismatched on every attempt, and silently fell back to
+    uniform mutation the whole time -- see the dimension assertions in main() for the hard stop
+    that now prevents this from ever reaching the loop). Same convention/logic as
+    probe_novel_check.py's derive_target_paths -- kept duplicated per this repo's
+    self-contained-scripts convention, not imported.
+    """
+    base = os.path.basename(config_path)
+    if probes_arg is not None and direction_arg is not None:
+        return probes_arg, direction_arg
+
+    if base == "exp.yaml":
+        tag = None
+    else:
+        m = re.match(r"^exp_(.+)\.yaml$", base)
+        tag = m.group(1) if m else None
+        if tag is None:
+            log.warning(
+                f"--config {config_path!r} doesn't match configs/exp.yaml or "
+                f"configs/exp_<tag>.yaml -- cannot derive per-target defaults, falling back to "
+                f"the original Qwen-tier paths. Pass --probes/--direction explicitly instead."
+            )
+
+    default_probes = f"results/{tag}/probes/probe_best_layer.npz" if tag else "results/probes/probe_best_layer.npz"
+    default_direction = f"results/{tag}/direction.npz" if tag else "results/direction.npz"
+
+    probes = probes_arg if probes_arg is not None else default_probes
+    direction = direction_arg if direction_arg is not None else default_direction
+    return probes, direction
+
+
 def load_probe(path):
     require_upstream_file(path, "probes")
     npz = np.load(path)
     coef = npz["coef"]              # [1, H]
     intercept = npz["intercept"]    # [1]
     layer = int(npz["layer"])       # 1-indexed
-    return coef, intercept, layer
+
+    # Best-effort friendly diagnostic (the sibling best_layer.json's recorded model string) --
+    # the AUTHORITATIVE check is the dimension assertion in main(), this is just a nicer message
+    # when it's available.
+    summary_path = os.path.join(os.path.dirname(path), "best_layer.json")
+    probe_model_id = None
+    if os.path.exists(summary_path):
+        probe_model_id = json.load(open(summary_path)).get("model")
+
+    return coef, intercept, layer, probe_model_id
 
 
 def load_direction(path):
@@ -703,8 +757,16 @@ def main():
                      help="use cfg['smoke_behaviors'] instead of cfg['n_behaviors']; if --out "
                           "was not given, insert _smoke before .json so a smoke run never "
                           "marks the real manifest job 'done'")
-    ap.add_argument("--probes", default="results/probes/probe_best_layer.npz")
-    ap.add_argument("--direction", default="results/direction.npz")
+    ap.add_argument(
+        "--probes", default=None,
+        help="default derived from --config (configs/exp_<tag>.yaml -> "
+             "results/<tag>/probes/probe_best_layer.npz); override to be explicit.",
+    )
+    ap.add_argument(
+        "--direction", default=None,
+        help="default derived from --config (configs/exp_<tag>.yaml -> "
+             "results/<tag>/direction.npz); override to be explicit.",
+    )
     ap.add_argument("--seed", type=int, default=None,
                      help="override cfg['seed'] -- lets experiments.yaml launch multiple seeded "
                           "variants of the same (target, method) condition (PLAN.md §10's "
@@ -778,15 +840,54 @@ def main():
 
     judge_tok, judge_model = load_judge(cfg["judge_model"], device)
 
+    probes_path, direction_path = derive_target_paths(args.config, args.probes, args.direction)
+    target_hidden_size = target_model.config.hidden_size
+
     directions, dir_layer_idx = None, None
     if args.method != "gptfuzzer" and args.mutation == "guided":
-        directions, dir_layer_idx, dir_layer, dir_model_id, _ = load_direction(args.direction)
-        log.info(f"loaded direction (layer={dir_layer}, idx={dir_layer_idx}) from {args.direction}")
+        directions, dir_layer_idx, dir_layer, dir_model_id, _ = load_direction(direction_path)
+        log.info(f"loaded direction (layer={dir_layer}, idx={dir_layer_idx}) from {direction_path}")
+        if dir_model_id and dir_model_id != cfg["target_model"]:
+            log.warning(
+                f"[model mismatch] direction extracted on {dir_model_id!r} but config "
+                f"target_model is {cfg['target_model']!r}"
+            )
+        # AUTHORITATIVE check, not just the string above: a wrong-target direction file that
+        # got past --config/--probes/--direction bookkeeping would otherwise shape-mismatch
+        # on every mutate_guided() call inside the per-candidate loop, where
+        # find_attribution_span()'s broad try/except (needed for genuinely transient/
+        # degenerate per-candidate failures) would silently swallow it as a fallback-to-
+        # uniform -- exactly what invalidated an earlier Phi-4-mini smoke run (guided_fire_
+        # count=0, guided_fallback_count=200, masquerading as a real "ours" result that was
+        # actually just uniform mutation the whole time). Fail HERE, before the loop, instead.
+        if directions.shape[-1] != target_hidden_size:
+            raise SystemExit(
+                f"[run_fuzz] FATAL: direction dimension mismatch -- {direction_path} has "
+                f"hidden_dim={directions.shape[-1]} but target model {cfg['target_model']!r} "
+                f"has hidden_size={target_hidden_size}. This means --direction (or --config) "
+                f"points at a DIFFERENT model's direction file. Continuing would silently "
+                f"fall back to uniform mutation on every iteration and produce an invalid "
+                f"'ours' result indistinguishable from a real one -- refusing to proceed. Fix "
+                f"--direction/--config to point at the same target and re-run."
+            )
 
     probe_coef, probe_intercept, probe_layer = None, None, None
     if args.method != "gptfuzzer" and args.fitness == "judge+act":
-        probe_coef, probe_intercept, probe_layer = load_probe(args.probes)
-        log.info(f"loaded probe (layer={probe_layer}) from {args.probes}")
+        probe_coef, probe_intercept, probe_layer, probe_model_id = load_probe(probes_path)
+        log.info(f"loaded probe (layer={probe_layer}) from {probes_path}")
+        if probe_model_id and probe_model_id != cfg["target_model"]:
+            log.warning(
+                f"[model mismatch] probe trained on {probe_model_id!r} but config "
+                f"target_model is {cfg['target_model']!r}"
+            )
+        if probe_coef.shape[-1] != target_hidden_size:
+            raise SystemExit(
+                f"[run_fuzz] FATAL: probe dimension mismatch -- {probes_path} has "
+                f"hidden_dim={probe_coef.shape[-1]} but target model {cfg['target_model']!r} "
+                f"has hidden_size={target_hidden_size}. --probes (or --config) points at a "
+                f"DIFFERENT model's probe file -- refusing to proceed. Fix --probes/--config "
+                f"to point at the same target and re-run."
+            )
 
     # ---- run --------------------------------------------------------------------------------
     counters = {
