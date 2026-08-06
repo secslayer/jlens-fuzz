@@ -192,7 +192,10 @@ Run `/review` at each gate. Log to `reviews/stageN.md`. Fix and re-review on FAI
   forward pass to the probe layer** scored by the probe (lower refusal-prob = higher
   fitness); full generation + judge only on elite candidates. Get first end-to-end jailbreaks
   on 5 behaviors; log queries-to-success and compute.
-- **Target:** `make ours SMOKE=1`
+- **Target:** `python scripts/run_fuzz.py --config configs/exp.yaml --method ours --mutation
+  guided --seedtier human --fitness judge --smoke` (there is no `make ours` target or `SMOKE`
+  variable — that line was documentation drift, corrected 2026-08-06 per `reviews/stage3.md`;
+  the actual manifest job `make job JOB=ours` runs the full (non-smoke) config).
 - **Gate 3 checklist (2026-08-06 update — see `reviews/stage3-human-signoff.md`):**
   - [x] Loop produces ≥1 judge-confirmed jailbreak on the 5-behavior smoke set.
   - [ ] ~~Partial-forward fitness runs and is cheaper than full-judge fitness~~ — **descoped from
