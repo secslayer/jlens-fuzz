@@ -35,6 +35,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import subprocess
 
 import numpy as np
@@ -98,13 +99,59 @@ def require_upstream_file(path, job_name):
         )
 
 
+def derive_target_paths(config_path, probes_arg, direction_arg):
+    """Derive default --probes/--direction paths from --config so this script works on ANY
+    target without the caller having to remember to keep three separate flags (--config,
+    --probes, --direction) manually in sync -- forgetting one silently mixes one target's
+    config with another target's probe/direction weights, which crashes deep inside a matmul
+    with a confusing shape-mismatch error instead of a clear message (this bit a real run on
+    Phi-4-mini: results/probes/* defaults are Qwen's, loaded against a Phi config).
+
+    Convention: configs/exp.yaml (the original default) keeps the original top-level defaults
+    (results/probes/probe_best_layer.npz, results/direction.npz) for backward compatibility.
+    configs/exp_<tag>.yaml derives results/<tag>/probes/probe_best_layer.npz and
+    results/<tag>/direction.npz. Explicit --probes/--direction always win over derivation.
+    """
+    base = os.path.basename(config_path)
+    if probes_arg is not None and direction_arg is not None:
+        return probes_arg, direction_arg
+
+    if base == "exp.yaml":
+        tag = None
+    else:
+        m = re.match(r"^exp_(.+)\.yaml$", base)
+        tag = m.group(1) if m else None
+        if tag is None:
+            log.warning(
+                f"--config {config_path!r} doesn't match configs/exp.yaml or "
+                f"configs/exp_<tag>.yaml -- cannot derive per-target defaults, falling back to "
+                f"the original Qwen-tier paths. Pass --probes/--direction explicitly instead."
+            )
+
+    default_probes = f"results/{tag}/probes/probe_best_layer.npz" if tag else "results/probes/probe_best_layer.npz"
+    default_direction = f"results/{tag}/direction.npz" if tag else "results/direction.npz"
+
+    probes = probes_arg if probes_arg is not None else default_probes
+    direction = direction_arg if direction_arg is not None else default_direction
+    return probes, direction
+
+
 def load_probe(path):
     require_upstream_file(path, "probes")
     npz = np.load(path)
     coef = npz["coef"]              # [1, H]
     intercept = npz["intercept"]    # [1]
     layer = int(npz["layer"])       # 1-indexed
-    return coef, intercept, layer
+
+    # Cross-check against the sibling best_layer.json's recorded model, same spirit as
+    # load_direction()'s model-id check below -- catches a config/probe mismatch BEFORE the
+    # matmul crash, with a clear message instead of a shape-mismatch traceback.
+    summary_path = os.path.join(os.path.dirname(path), "best_layer.json")
+    probe_model_id = None
+    if os.path.exists(summary_path):
+        probe_model_id = json.load(open(summary_path)).get("model")
+
+    return coef, intercept, layer, probe_model_id
 
 
 def load_direction(path):
@@ -185,8 +232,16 @@ def main():
                     "nothing to disk, not part of experiments.yaml's manifest."
     )
     ap.add_argument("--config", default="configs/exp.yaml")
-    ap.add_argument("--probes", default="results/probes/probe_best_layer.npz")
-    ap.add_argument("--direction", default="results/direction.npz")
+    ap.add_argument(
+        "--probes", default=None,
+        help="default derived from --config (configs/exp_<tag>.yaml -> "
+             "results/<tag>/probes/probe_best_layer.npz); override to be explicit.",
+    )
+    ap.add_argument(
+        "--direction", default=None,
+        help="default derived from --config (configs/exp_<tag>.yaml -> "
+             "results/<tag>/direction.npz); override to be explicit.",
+    )
     ap.add_argument(
         "--prompts-file", default=None,
         help="optional path to a JSON list of {'text':..., 'label':'harmful'|'benign'} "
@@ -205,20 +260,39 @@ def main():
             "check on CPU will be slow. Real checks happen on Kaggle GPU."
         )
 
-    coef, intercept, probe_layer = load_probe(args.probes)
+    probes_path, direction_path = derive_target_paths(args.config, args.probes, args.direction)
+    log.info(f"resolved --probes={probes_path}  --direction={direction_path} (from --config {args.config})")
+
+    coef, intercept, probe_layer, probe_model_id = load_probe(probes_path)
     directions, dir_layer_idx, dir_layer, dir_model_id, dir_provenance = load_direction(
-        args.direction
+        direction_path
     )
     log.info(
         f"loaded probe (layer={probe_layer}) and direction (layer={dir_layer}, "
-        f"idx={dir_layer_idx}) from {args.probes} / {args.direction}"
+        f"idx={dir_layer_idx}) from {probes_path} / {direction_path}"
     )
 
     target_model_id = cfg["target_model"]
+    mismatch = False
+    if probe_model_id and probe_model_id != target_model_id:
+        log.error(
+            f"[model mismatch] probe trained on {probe_model_id!r} but config target_model is "
+            f"{target_model_id!r} -- this WILL crash or silently produce garbage (wrong hidden "
+            f"size / wrong semantics). Pass --config/--probes for the SAME target."
+        )
+        mismatch = True
     if dir_model_id and dir_model_id != target_model_id:
-        log.warning(
+        log.error(
             f"[model mismatch] direction extracted on {dir_model_id!r} but config target_model "
-            f"is {target_model_id!r}"
+            f"is {target_model_id!r} -- this WILL crash or silently produce garbage. Pass "
+            f"--config/--direction for the SAME target."
+        )
+        mismatch = True
+    if mismatch:
+        raise SystemExit(
+            "[probe_novel_check] refusing to continue with mismatched target/probe/direction "
+            "-- see the model-mismatch errors above. Fix --config/--probes/--direction to all "
+            "point at the same target before re-running."
         )
 
     prompts = load_prompts(args.prompts_file)
@@ -238,11 +312,27 @@ def main():
         hidden = extract_last_token_hidden(model, tok, prompt_text, device)  # [L, H]
 
         probe_h = hidden[probe_layer - 1]  # 1-indexed -> 0-indexed
-        probe_logit = float(coef @ probe_h + intercept[0])
+        try:
+            probe_logit = float(coef @ probe_h + intercept[0])
+        except ValueError as e:
+            raise SystemExit(
+                f"[probe_novel_check] shape mismatch applying the probe ({e}). This almost "
+                f"always means --probes/--config point at DIFFERENT targets (e.g. Qwen's probe "
+                f"weights against a Phi hidden state) -- the model-id cross-check above should "
+                f"have caught this; if it didn't, best_layer.json next to --probes is probably "
+                f"missing its 'model' field. Fix the paths and re-run."
+            ) from e
         probe_score = float(sigmoid(probe_logit))
 
         direction_h = hidden[dir_layer_idx]
-        direction_score = float(direction_h @ directions[dir_layer_idx])
+        try:
+            direction_score = float(direction_h @ directions[dir_layer_idx])
+        except ValueError as e:
+            raise SystemExit(
+                f"[probe_novel_check] shape mismatch applying the direction ({e}). Same likely "
+                f"cause as the probe shape mismatch above -- --direction/--config point at "
+                f"different targets. Fix the paths and re-run."
+            ) from e
 
         probe_scores.append(probe_score)
         direction_scores.append(direction_score)
