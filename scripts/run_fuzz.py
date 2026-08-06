@@ -705,6 +705,11 @@ def main():
                           "marks the real manifest job 'done'")
     ap.add_argument("--probes", default="results/probes/probe_best_layer.npz")
     ap.add_argument("--direction", default="results/direction.npz")
+    ap.add_argument("--seed", type=int, default=None,
+                     help="override cfg['seed'] -- lets experiments.yaml launch multiple seeded "
+                          "variants of the same (target, method) condition (PLAN.md §10's "
+                          "3-seeds-per-condition rigor requirement) without needing a separate "
+                          "config file per seed. Defaults to cfg['seed'] when not given.")
     args = ap.parse_args()
 
     if args.method == "autodan":
@@ -744,7 +749,7 @@ def main():
     full_records_file = f"results/prompts_{stem}_full.jsonl"
 
     cfg = yaml.safe_load(open(args.config))
-    seed = cfg.get("seed", 0)
+    seed = args.seed if args.seed is not None else cfg.get("seed", 0)
     set_seed(seed)
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 
@@ -862,6 +867,7 @@ def main():
         "mutation": args.mutation,
         "seedtier": args.seedtier,
         "fitness": args.fitness,
+        "seed": seed,
         "target_model": cfg["target_model"],
         "judge_model": cfg["judge_model"],
         "n_behaviors": len(behaviors),

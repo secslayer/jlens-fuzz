@@ -1,9 +1,9 @@
-# Target-difficulty ladder, tier 2/4: "same-size/family" control.
-# Scaffolded 2026-08-06 (PLAN.md §10) -- DO NOT LAUNCH until the Qwen2.5-3B core lane
-# (Stages 4-7, configs/exp.yaml) is complete and reviewed. Every invariant below is
-# identical to configs/exp.yaml except target_model/mutate_model -- see CLAUDE.md rule 3
-# and configs/exp.yaml's own header comment: cross-target ASR comparisons are only valid
-# if judge/benchmark/budget/decoding stay fixed and only the target varies.
+# Target-difficulty design (PLAN.md §10): LOCKED CORE tier 2/2, the "treatment" target.
+# Promoted from extended-lane scaffold to core 2026-08-06, alongside configs/exp.yaml (Qwen2.5-3B,
+# the "control"). DO NOT LAUNCH until the Qwen2.5-3B core lane (Stages 4-7) is complete and
+# reviewed. Every invariant below is identical to configs/exp.yaml except target_model/
+# mutate_model -- see CLAUDE.md rule 3: cross-target ASR comparisons are only valid if
+# judge/benchmark/budget/decoding stay fixed and only the target varies.
 seed: 0
 
 # ~3.8B params, ungated. ~8GB in fp16, fits a single T4 (16GB) comfortably alongside
@@ -13,12 +13,13 @@ target_model: "microsoft/Phi-4-mini-instruct"
 judge_model: "hubert233/GPTFuzz"
 
 benchmark: "https://raw.githubusercontent.com/llm-attacks/llm-attacks/main/data/advbench/harmful_behaviors.csv"
-n_behaviors: 50
+# Locked 2026-08-06 to the affordable core design -- must match configs/exp.yaml exactly.
+n_behaviors: 25
 smoke_behaviors: 5
 
 human_seed_templates: "https://raw.githubusercontent.com/sherdencooper/GPTFuzz/master/datasets/prompts/GPTFuzzer.csv"
 
-query_budget: 50
+query_budget: 40            # locked 2026-08-06, was 50 -- must match configs/exp.yaml exactly
 max_iterations: 100
 mutate_model: "microsoft/Phi-4-mini-instruct"   # local mutator == target, avoids a 2nd model load
 decode_temperature: 0.7

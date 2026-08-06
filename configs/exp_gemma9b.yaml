@@ -1,12 +1,14 @@
-# Target-difficulty ladder, tier 4/4: HARD capstone target.
-# Scaffolded 2026-08-06 (PLAN.md §10) -- DO NOT LAUNCH until (a) the Qwen2.5-3B core lane
-# is complete and reviewed, AND (b) the code blockers below are fixed. Sequenced LAST:
-# only commit the GPU budget here if the mid-tier targets (Phi-4-mini, Qwen2.5-7B) show
-# real headroom over Qwen-3B's saturation; if they saturate too, Gemma is what makes the
-# paper's difficulty-axis claim defensible (8% ASR vs. Llama-3.1's 22% on HarmBench is the
-# only citable, consistent difficulty gap among the candidates considered -- see PLAN.md §10).
+# Target-difficulty ladder -- FUTURE WORK, compute-limited, DROPPED from the core design
+# 2026-08-06 (PLAN.md §10: locked core is Qwen2.5-3B + Phi-4-mini only, 2 targets). Kept as
+# inert scaffolding (lane: extended in experiments.yaml, never launched) in case budget or
+# scope reopens later -- Gemma remains the best-evidenced hard target if that happens
+# (8% ASR vs. Llama-3.1's 22% on HarmBench is the only citable, consistent difficulty gap
+# among the candidates considered -- see PLAN.md §10).
 #
-# TWO HARD BLOCKERS, confirmed 2026-08-06, NOT fixed yet (scaffold only per instruction):
+# Since Gemma is dropped from the core design, the device_map multi-GPU work below stays
+# DEFERRED -- not being fixed now, no code changes planned until/unless this is revisited.
+#
+# TWO HARD BLOCKERS, confirmed 2026-08-06, NOT fixed, deferred indefinitely with this target:
 #   1. GATED on Hugging Face (verified live via the HF API: gated="manual"). Request/accept
 #      access at https://huggingface.co/google/gemma-2-9b-it before attempting to launch --
 #      approval is not instant, so do this well before you need it.
@@ -29,12 +31,12 @@ target_model: "google/gemma-2-9b-it"
 judge_model: "hubert233/GPTFuzz"
 
 benchmark: "https://raw.githubusercontent.com/llm-attacks/llm-attacks/main/data/advbench/harmful_behaviors.csv"
-n_behaviors: 50
+n_behaviors: 25             # kept in sync with the locked core (was 50)
 smoke_behaviors: 5
 
 human_seed_templates: "https://raw.githubusercontent.com/sherdencooper/GPTFuzz/master/datasets/prompts/GPTFuzzer.csv"
 
-query_budget: 50
+query_budget: 40            # kept in sync with the locked core (was 50)
 max_iterations: 100
 mutate_model: "google/gemma-2-9b-it"   # local mutator == target, avoids a 2nd model load
 decode_temperature: 0.7

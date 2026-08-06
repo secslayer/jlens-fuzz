@@ -28,11 +28,25 @@ jobs:
     cmd: "python scripts/validate_signal.py --config {config}"
 
   # ---- baselines (identical conditions; see CLAUDE.md rule 3) ----
+  # 3 seeds per condition (PLAN.md §10 rigor requirement, locked 2026-08-06) — same rule as the
+  # `ours`/ablation jobs below; the baseline needs CIs too for a fair comparison.
   gptfuzzer:                    # black-box control (no internal signal) — RQ1 denominator
     lane: core
     needs: []
     produces: results/gptfuzzer.json
     cmd: "python scripts/run_fuzz.py --config {config} --method gptfuzzer"
+
+  gptfuzzer_seed1:
+    lane: core
+    needs: []
+    produces: results/gptfuzzer_seed1.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method gptfuzzer --seed 1 --out results/gptfuzzer_seed1.json"
+
+  gptfuzzer_seed2:
+    lane: core
+    needs: []
+    produces: results/gptfuzzer_seed2.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method gptfuzzer --seed 2 --out results/gptfuzzer_seed2.json"
 
   autodan:
     lane: extended
@@ -54,11 +68,27 @@ jobs:
   # guided-mutation, Component 3) PASSED cleanly and is unaffected. Core-lane fitness defaults
   # to judge-only (validated in Stage 1) until the probe is fixed and re-validated — see
   # abl_fitness_probeact below and the tracked follow-up issue.
+  # 3 seeds per condition (PLAN.md §10 rigor requirement, locked 2026-08-06): the base job below
+  # (no suffix) uses cfg["seed"]=0; _seed1/_seed2 override via run_fuzz.py's --seed flag. All
+  # three must complete before reporting ASR/queries-to-success with a confidence interval for
+  # this condition — a single seed is not sufficient (PLAN.md §10: "will not survive review").
   ours:                         # guided-span mutation (direction-driven) + judge-only fitness
     lane: core
     needs: [probes, direction]
     produces: results/ours.json
     cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge"
+
+  ours_seed1:
+    lane: core
+    needs: [probes, direction]
+    produces: results/ours_seed1.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge --seed 1 --out results/ours_seed1.json"
+
+  ours_seed2:
+    lane: core
+    needs: [probes, direction]
+    produces: results/ours_seed2.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge --seed 2 --out results/ours_seed2.json"
 
   abl_mut_uniform:              # RQ1 isolation: same loop, mutate WHOLE prompt (not the attributed span)
     lane: core
@@ -66,17 +96,53 @@ jobs:
     produces: results/abl_mut_uniform.json
     cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation uniform --seedtier human --fitness judge"
 
+  abl_mut_uniform_seed1:
+    lane: core
+    needs: [probes, direction]
+    produces: results/abl_mut_uniform_seed1.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation uniform --seedtier human --fitness judge --seed 1 --out results/abl_mut_uniform_seed1.json"
+
+  abl_mut_uniform_seed2:
+    lane: core
+    needs: [probes, direction]
+    produces: results/abl_mut_uniform_seed2.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation uniform --seedtier human --fitness judge --seed 2 --out results/abl_mut_uniform_seed2.json"
+
   abl_seed_bootstrap:           # RQ2 seed tier (b): model-bootstrapped seeds
     lane: core
     needs: [probes, direction]
     produces: results/abl_seed_bootstrap.json
     cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier bootstrap --fitness judge"
 
+  abl_seed_bootstrap_seed1:
+    lane: core
+    needs: [probes, direction]
+    produces: results/abl_seed_bootstrap_seed1.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier bootstrap --fitness judge --seed 1 --out results/abl_seed_bootstrap_seed1.json"
+
+  abl_seed_bootstrap_seed2:
+    lane: core
+    needs: [probes, direction]
+    produces: results/abl_seed_bootstrap_seed2.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier bootstrap --fitness judge --seed 2 --out results/abl_seed_bootstrap_seed2.json"
+
   abl_seed_random:              # RQ2 seed tier (c): random innocuous seeds (the hardest, headline)
     lane: core
     needs: [probes, direction]
     produces: results/abl_seed_random.json
     cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier random --fitness judge"
+
+  abl_seed_random_seed1:
+    lane: core
+    needs: [probes, direction]
+    produces: results/abl_seed_random_seed1.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier random --fitness judge --seed 1 --out results/abl_seed_random_seed1.json"
+
+  abl_seed_random_seed2:
+    lane: core
+    needs: [probes, direction]
+    produces: results/abl_seed_random_seed2.json
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier random --fitness judge --seed 2 --out results/abl_seed_random_seed2.json"
 
   abl_fitness_probeact:         # Component 4 diagnostic: probe+judge fitness — NOT VALIDATED.
                                  # Probe failed Gate 2 novel-prompt generalization (see note
@@ -113,88 +179,157 @@ jobs:
     produces: results/defense_smoothllm.json
     cmd: "python scripts/eval_defense.py --config {config} --defense smoothllm --from results/ours.json"
 
-  # ---- target-difficulty ladder (RQ3, PLAN.md §10) — SCAFFOLD ONLY, DO NOT LAUNCH ----
-  # Added 2026-08-06. Every job below is `lane: extended` on purpose: this is the SAME
-  # mechanism that already keeps autodan/amnesia/etc. out of `run_controller.py`'s default
-  # `--lane core` ready set (see ORCHESTRATION.md's lane semantics) — it is how "don't
-  # launch until the Qwen core lane is done and reviewed" is actually enforced here, not
-  # just a comment. Do not pass `--lane extended`/`--lane all` to the controller for these
-  # until that condition is met.
+  # ---- target-difficulty ladder, dropped tiers (RQ3, PLAN.md §10) — FUTURE WORK, DO NOT LAUNCH
+  # Status update 2026-08-06: the locked core design is Qwen2.5-3B + Phi-4-mini ONLY (2
+  # targets) — phi4mini's job family was promoted to `lane: core` above (with the Qwen
+  # tier). Qwen-7B and Gemma-9B below are DROPPED from the core design (compute-limited,
+  # not "sequenced later" — see PLAN.md §10) and stay `lane: extended` indefinitely. This is
+  # the SAME mechanism that already keeps autodan/amnesia/etc. out of `run_controller.py`'s
+  # default `--lane core` ready set (see ORCHESTRATION.md's lane semantics). Do not pass
+  # `--lane extended`/`--lane all` to the controller for these unless the core design is
+  # revisited.
   #
-  # Per-target job family = the same 8-job shape as the Qwen tier above (probes, direction,
-  # validate, gptfuzzer, ours, abl_mut_uniform, abl_seed_bootstrap, abl_seed_random),
-  # namespaced under results/<tag>/ via explicit --out/--probes/--direction flags (every
-  # underlying script already supports these overrides — no script changes were needed for
-  # this except one bug fix: run_fuzz.py's full_records_file derivation used to collapse to
-  # basename only, which would have collided across targets' gitignored raw-prompt side
-  # files; now derives from the full --out path, unique per target).
+  # Per-target job family = the same 8-job shape as the Qwen/phi4mini tiers above (probes,
+  # direction, validate, gptfuzzer, ours, abl_mut_uniform, abl_seed_bootstrap,
+  # abl_seed_random), namespaced under results/<tag>/ via explicit --out/--probes/--direction
+  # flags (every underlying script already supports these overrides). Kept WITHOUT the
+  # 3-seed variants the core tiers have — not worth scaffolding seeds for a dropped tier.
   #
-  # NOT in the manifest per target, same as the Qwen tier: scripts/sanity_check.py (Stage 1,
-  # baseline refusal) — it was never a manifest job for Qwen either (RUNBOOK.md documents it
-  # as a manual per-config invocation). Run it manually first for each target with
-  # `--config configs/exp_<tag>.yaml` before probes_<tag>/direction_<tag> — same as Stage 1
-  # always has been, just repeated per target since the refusal baseline is target-specific.
-  #
-  # gemma9b additionally has TWO unresolved code blockers before it can run at all — see
-  # configs/exp_gemma9b.yaml's header comment (gated HF access + no device_map="auto"
-  # anywhere in this repo's model-loading code, confirmed via grep 2026-08-06). Scaffolded
-  # here anyway so the manifest shape exists; do not attempt to launch until both are fixed.
+  # gemma9b additionally has TWO unresolved code blockers, deferred indefinitely along with
+  # the target itself — see configs/exp_gemma9b.yaml's header comment (gated HF access + no
+  # device_map="auto" anywhere in this repo's model-loading code, confirmed via grep
+  # 2026-08-06). Not being fixed while this target is dropped.
 
+  # phi4mini: LOCKED CORE tier 2/2 (promoted from extended-lane scaffold 2026-08-06 — the
+  # target-difficulty ladder's Qwen-7B/Gemma-9B tiers below remain lane: extended /
+  # future-work; only Qwen2.5-3B (above) and Phi-4-mini (below) are in the locked core
+  # design). Same 3-seeds-per-condition rule as the Qwen tier for the 5 fuzzing jobs;
+  # probes/direction/validate stay single-run (not a stochastic ASR outcome).
   probes_phi4mini:
-    lane: extended
+    lane: core
     needs: []
     produces: results/phi4mini/probes/best_layer.json
     config: configs/exp_phi4mini.yaml
     cmd: "python scripts/train_probes.py --config {config} --out results/phi4mini/probes"
 
   direction_phi4mini:
-    lane: extended
+    lane: core
     needs: []
     produces: results/phi4mini/direction.npz
     config: configs/exp_phi4mini.yaml
     cmd: "python scripts/extract_direction.py --config {config} --out results/phi4mini/direction.npz"
 
   validate_phi4mini:
-    lane: extended
+    lane: core
     needs: [probes_phi4mini, direction_phi4mini]
     produces: results/phi4mini/validate_signal.json
     config: configs/exp_phi4mini.yaml
     cmd: "python scripts/validate_signal.py --config {config} --out results/phi4mini/validate_signal.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
 
   gptfuzzer_phi4mini:
-    lane: extended
+    lane: core
     needs: []
     produces: results/phi4mini/gptfuzzer.json
     config: configs/exp_phi4mini.yaml
     cmd: "python scripts/run_fuzz.py --config {config} --method gptfuzzer --out results/phi4mini/gptfuzzer.json"
 
+  gptfuzzer_phi4mini_seed1:
+    lane: core
+    needs: []
+    produces: results/phi4mini/gptfuzzer_seed1.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method gptfuzzer --seed 1 --out results/phi4mini/gptfuzzer_seed1.json"
+
+  gptfuzzer_phi4mini_seed2:
+    lane: core
+    needs: []
+    produces: results/phi4mini/gptfuzzer_seed2.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method gptfuzzer --seed 2 --out results/phi4mini/gptfuzzer_seed2.json"
+
   ours_phi4mini:
-    lane: extended
+    lane: core
     needs: [probes_phi4mini, direction_phi4mini]
     produces: results/phi4mini/ours.json
     config: configs/exp_phi4mini.yaml
     cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge --out results/phi4mini/ours.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
 
+  ours_phi4mini_seed1:
+    lane: core
+    needs: [probes_phi4mini, direction_phi4mini]
+    produces: results/phi4mini/ours_seed1.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge --seed 1 --out results/phi4mini/ours_seed1.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
+
+  ours_phi4mini_seed2:
+    lane: core
+    needs: [probes_phi4mini, direction_phi4mini]
+    produces: results/phi4mini/ours_seed2.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge --seed 2 --out results/phi4mini/ours_seed2.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
+
   abl_mut_uniform_phi4mini:
-    lane: extended
+    lane: core
     needs: [probes_phi4mini, direction_phi4mini]
     produces: results/phi4mini/abl_mut_uniform.json
     config: configs/exp_phi4mini.yaml
     cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation uniform --seedtier human --fitness judge --out results/phi4mini/abl_mut_uniform.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
 
+  abl_mut_uniform_phi4mini_seed1:
+    lane: core
+    needs: [probes_phi4mini, direction_phi4mini]
+    produces: results/phi4mini/abl_mut_uniform_seed1.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation uniform --seedtier human --fitness judge --seed 1 --out results/phi4mini/abl_mut_uniform_seed1.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
+
+  abl_mut_uniform_phi4mini_seed2:
+    lane: core
+    needs: [probes_phi4mini, direction_phi4mini]
+    produces: results/phi4mini/abl_mut_uniform_seed2.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation uniform --seedtier human --fitness judge --seed 2 --out results/phi4mini/abl_mut_uniform_seed2.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
+
   abl_seed_bootstrap_phi4mini:
-    lane: extended
+    lane: core
     needs: [probes_phi4mini, direction_phi4mini]
     produces: results/phi4mini/abl_seed_bootstrap.json
     config: configs/exp_phi4mini.yaml
     cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier bootstrap --fitness judge --out results/phi4mini/abl_seed_bootstrap.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
 
+  abl_seed_bootstrap_phi4mini_seed1:
+    lane: core
+    needs: [probes_phi4mini, direction_phi4mini]
+    produces: results/phi4mini/abl_seed_bootstrap_seed1.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier bootstrap --fitness judge --seed 1 --out results/phi4mini/abl_seed_bootstrap_seed1.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
+
+  abl_seed_bootstrap_phi4mini_seed2:
+    lane: core
+    needs: [probes_phi4mini, direction_phi4mini]
+    produces: results/phi4mini/abl_seed_bootstrap_seed2.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier bootstrap --fitness judge --seed 2 --out results/phi4mini/abl_seed_bootstrap_seed2.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
+
   abl_seed_random_phi4mini:
-    lane: extended
+    lane: core
     needs: [probes_phi4mini, direction_phi4mini]
     produces: results/phi4mini/abl_seed_random.json
     config: configs/exp_phi4mini.yaml
     cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier random --fitness judge --out results/phi4mini/abl_seed_random.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
+
+  abl_seed_random_phi4mini_seed1:
+    lane: core
+    needs: [probes_phi4mini, direction_phi4mini]
+    produces: results/phi4mini/abl_seed_random_seed1.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier random --fitness judge --seed 1 --out results/phi4mini/abl_seed_random_seed1.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
+
+  abl_seed_random_phi4mini_seed2:
+    lane: core
+    needs: [probes_phi4mini, direction_phi4mini]
+    produces: results/phi4mini/abl_seed_random_seed2.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier random --fitness judge --seed 2 --out results/phi4mini/abl_seed_random_seed2.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
 
   probes_qwen7b:
     lane: extended
@@ -309,6 +444,13 @@ jobs:
     cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier random --fitness judge --out results/gemma9b/abl_seed_random.json --probes results/gemma9b/probes/probe_best_layer.npz --direction results/gemma9b/direction.npz"
 
   # ---- reporting ----
+  # OPEN ITEM (2026-08-06, flagged not solved): `needs` below still only lists the seed-0 Qwen
+  # jobs plus phi4mini's implicit dependency via `ours` is NOT yet wired in, even though the
+  # locked core design now has 2 targets x 3 seeds each. make_figures.py doesn't exist yet
+  # (Day 6) and the seed/target aggregation logic (mean + 95% CI across 3 seeds, per-target
+  # tables) isn't designed yet either — deliberately not guessing at that shape here. Revisit
+  # this `needs` list (and probably add phi4mini's ~18 job ids to it) when make_figures.py is
+  # actually built, not before.
   figures:
     lane: core
     needs: [ours, gptfuzzer, abl_mut_uniform, abl_seed_bootstrap, abl_seed_random, transfer_local, validate]

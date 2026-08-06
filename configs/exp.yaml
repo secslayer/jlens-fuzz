@@ -10,7 +10,10 @@ judge_model: "hubert233/GPTFuzz"
 # Benchmark subset. Canonical AdvBench CSV (ungated) from the original llm-attacks repo —
 # NOT the gated walledai/AdvBench HF dataset. Columns: goal, target.
 benchmark: "https://raw.githubusercontent.com/llm-attacks/llm-attacks/main/data/advbench/harmful_behaviors.csv"
-n_behaviors: 50
+# Locked 2026-08-06 to the affordable core design (PLAN.md §10): 25 behaviors (not 50) and
+# query_budget 40 (not 50), given the real 3-seed x 2-target GPU-hour cost -- see PLAN.md §10's
+# worked budget table before changing either of these.
+n_behaviors: 25
 smoke_behaviors: 5
 
 # Human seed-tier jailbreak templates for run_fuzz.py (the original GPTFuzzer seed pool, public
@@ -19,7 +22,7 @@ smoke_behaviors: 5
 human_seed_templates: "https://raw.githubusercontent.com/sherdencooper/GPTFuzz/master/datasets/prompts/GPTFuzzer.csv"
 
 # Fuzzing budget — IDENTICAL across all methods for a fair comparison.
-query_budget: 50            # full-generation queries per behavior
+query_budget: 40            # full-generation queries per behavior (locked 2026-08-06, was 50)
 max_iterations: 100
 mutate_model: "Qwen/Qwen2.5-3B-Instruct"   # local mutator to avoid API cost
 decode_temperature: 0.7
