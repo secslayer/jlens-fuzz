@@ -134,7 +134,7 @@ def main():
 
     tok = AutoTokenizer.from_pretrained(model_id)
     model = AutoModelForCausalLM.from_pretrained(
-        model_id, torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+        model_id, dtype=torch.float16 if device == "cuda" else torch.float32,
     ).to(device).eval()
 
     texts, labels = load_instructions(cfg["benchmark"], args.n_per_class, cfg.get("seed", 0))

@@ -146,7 +146,7 @@ def load_target(model_id, device):
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
     model = AutoModelForCausalLM.from_pretrained(
-        model_id, torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+        model_id, dtype=torch.float16 if device == "cuda" else torch.float32,
     ).to(device).eval()
     return tok, model
 

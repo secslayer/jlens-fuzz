@@ -1,5 +1,7 @@
 torch>=2.2
-transformers>=4.44
+transformers>=4.56   # dtype= (not torch_dtype=) requires 4.56.0+; verified via a real pip
+                     # download+source-grep of 4.55.0 (no dtype= support) vs 4.56.0 (has it,
+                     # torch_dtype= kept as a deprecated BC alias) before this bump
 accelerate>=0.30
 datasets>=2.19
 scikit-learn>=1.4
