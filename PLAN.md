@@ -193,12 +193,16 @@ Run `/review` at each gate. Log to `reviews/stageN.md`. Fix and re-review on FAI
   fitness); full generation + judge only on elite candidates. Get first end-to-end jailbreaks
   on 5 behaviors; log queries-to-success and compute.
 - **Target:** `make ours SMOKE=1`
-- **Gate 3 checklist:**
-  - [ ] Loop produces ≥1 judge-confirmed jailbreak on the 5-behavior smoke set.
-  - [ ] Partial-forward fitness runs and is cheaper than full-judge fitness (logged FLOPs/
-        wall-clock show the gap).
-  - [ ] No harmful strings written to any git-tracked path (grep).
-- **Exit:** smoke run green; efficiency delta recorded.
+- **Gate 3 checklist (2026-08-06 update — see `reviews/stage3-human-signoff.md`):**
+  - [x] Loop produces ≥1 judge-confirmed jailbreak on the 5-behavior smoke set.
+  - [ ] ~~Partial-forward fitness runs and is cheaper than full-judge fitness~~ — **descoped from
+        this gate.** That path runs on the Stage 2 probe signal already proven not to generalize
+        (`reviews/stage2-human-signoff.md`); an efficiency number from a signal known to be
+        unreliable isn't a meaningful pass/fail check. Deferred to the Day 5 extended-lane
+        `abl_fitness_probeact` run, reported there as a finding, not a gate.
+  - [x] No harmful strings written to any git-tracked path (grep).
+- **Exit:** smoke run green (both remaining checklist items closed); efficiency delta deferred to
+  Day 5, not blocking.
 
 ### Stage 4 — Seed-free ablation (Day 4) — **the headline**
 - **Agent tasks:** implement workspace-derived seed generation (read candidate framings from
