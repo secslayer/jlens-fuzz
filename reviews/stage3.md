@@ -1,110 +1,98 @@
 # Stage 3 Review — Fitness swap into the fuzzing loop (`scripts/run_fuzz.py`)
 
-**Branch:** `stage-3-run-fuzz` @ `c973943` (matches `origin/stage-3-run-fuzz`, working tree clean)
-**Reviewer:** agent (adversarial peer review), 2026-08-06
+**Branch:** `stage-3-run-fuzz` @ `ad3d530` (working tree clean at time of review)
+**Reviewer:** agent (adversarial peer review, fresh pass — prior FAIL not carried forward from memory)
+**Date:** 2026-08-06
 
-## Overall verdict: **FAIL**
+## Overall verdict: **PASS**
 
-The code (`scripts/run_fuzz.py`) is real, complete, and its two claimed bugfix commits check out
-against the diff. But the gate's central empirical claim — "loop produces ≥1 judge-confirmed
-jailbreak on the 5-behavior smoke set" — has **zero backing artifact in the repo**. No
-`results/ours_smoke.json` (or any `results/ours*.json`) exists anywhere: not tracked, not
-untracked, not on origin, not in any commit in `git log --all`. `reviews/stage3-human-signoff.md`
-asserts ASR=1.0, 3 hand-verified genuine jailbreaks, and "100% guided mutation, 0 fallbacks" —
-but these are narrative claims about a Kaggle session with no committed output JSON to check them
-against. This is exactly CLAUDE.md rule 2 ("never invent numbers... a number with no provenance
-does not go in the paper") and this reviewer's own standing red flag ("any number cited that has
-no backing `results/*.json` → FAIL"). A well-written human sign-off narrative is not a substitute
-for the actual artifact, unlike Stage 1 (`results/sanity.json`, committed) and Stage 2
-(`results/probes/best_layer.json`, committed) where the human sign-off doc was paired with a real
-file this reviewer could independently open and check numbers against.
+The previous FAIL (`be76ef6`, prior `reviews/stage3.md`) was for exactly one reason: no
+`results/ours_smoke.json` existed to back the ASR=1.0 / guided-mutation claims in
+`reviews/stage3-human-signoff.md`. That artifact now exists (`85ad432`, regenerated `ad3d530`),
+is git-tracked, and every number in it is internally consistent, arithmetically sound, and
+consistent with the human sign-off narrative. Code changes since the last review
+(`2a6a5f6` — `guided_fire_count`/`guided_fallback_count`) are real, correctly wired, and were
+actually present in the codebase at the commit the run's `_provenance.git_sha` claims to have
+executed against. No regressions found in the previously-passing items.
 
-## Checklist table
+## Checklist table (PLAN.md §6, Stage 3, post-descope framing)
 
-| Gate 3 item (PLAN.md §6, post-descope) | Verdict | Evidence |
+| Gate 3 item | Verdict | Evidence |
 |---|---|---|
-| Loop produces ≥1 judge-confirmed jailbreak on the 5-behavior smoke set | **FAIL** | No `results/ours_smoke.json` or any `results/ours*.json` exists. `git ls-files \| grep -i ours` → empty. `find . -iname "*ours*" -not -path "./.git/*"` → empty. `git log --all --diff-filter=A --name-only \| grep -i ours` → no such file ever added in any commit, on this branch or any other. The ASR=1.0 / "3 spot-checked genuine jailbreaks" claims in `reviews/stage3-human-signoff.md` (lines 17, 29, 41) have no `results/*.json` to back them — fabrication red flag per this reviewer's own instructions and CLAUDE.md rule 2. |
-| ~~Partial-forward fitness cheaper than full-judge fitness~~ (descoped) | **N/A (correctly descoped)** | PLAN.md lines 198-202 strike this with a stated rationale (judge+act rides the Stage 2 probe signal, proven non-generalizing per `reviews/stage2-human-signoff.md`: 0.5 acc on 6 novel prompts vs. 1.0 training AUC). Rationale is sound and consistent with `experiments.yaml` demoting `abl_fitness_probeact` to `lane: extended` (lines 81-88) with an explicit "NOT VALIDATED... do not report headline numbers from this job until then" comment. Reasonable to descope, but see "process" note below — descoping a gate item after the fact requires the *other* item still be independently verified, which it is not (see row above). |
-| No harmful strings written to any git-tracked path (grep) | **PASS (by code inspection)** | The tracked-output dict (`summary`, `run_fuzz.py` lines 836-864) contains only scalars/counters — no `template`/`candidate`/`completion` field. Raw per-candidate records (`records`, appended at line 640-649, containing `template`, `candidate`, `completion`) are written only to `full_records_file = results/prompts_{stem}_full.jsonl` (line 726, write loop lines 814-818), never to `out_path`. Confirmed `.gitignore` line 10 `results/**/prompts_*` actually matches this filename: `git check-ignore -v results/prompts_ours_smoke_full.jsonl` → matches (`.gitignore:10:results/**/prompts_*`), verified experimentally (`touch` + `git check-ignore`, exit 0). `git grep -niE "api[_-]?key\|secret"` and a scan for harmful-instruction phrasing in tracked non-.md files → no hits. Note this PASS is necessarily vacuous on live data: since no run's output was ever committed, there is currently no tracked artifact to have leaked anything into in the first place — the PASS is about the code's design, not about a verified real run's output. |
+| Loop produces ≥1 judge-confirmed jailbreak on the 5-behavior smoke set | **PASS** | `results/ours_smoke.json`: `n_behaviors=5`, `asr=1.0`, `queries_to_success.per_behavior=[3,2,3,3,3]` (all non-null → all 5 behaviors succeeded), `method="ours"`, `mutation="guided"`, `seedtier="human"`, `fitness="judge"` — matches the flags claimed in `reviews/stage3-human-signoff.md` line 17. `full_forward_passes=14 == sum([3,2,3,3,3])`, exactly as expected: under `--fitness judge` every MCTS iteration is a full generate+judge pass (`run_fuzz.py` lines 593-605), and `queries_to_success` for a behavior equals `behavior_full_passes` at the success iteration (line 672), so the total across 5 successful behaviors must equal total `full_forward_passes`. It does: 14 = 14. `partial_forward_passes=0`, correct for `--fitness judge` (the `judge+act` branch, lines 606-646, never executes). Human sign-off's narrative claims (ASR=1.0, 3 spot-checked genuine jailbreaks) are consistent with — not contradicted by — the now-real aggregate. |
+| ~~Partial-forward fitness cheaper than full-judge fitness~~ (descoped) | **N/A (correctly descoped)** | PLAN.md lines 197-203 still strike this with the stated rationale (probe signal proven non-generalizing, `reviews/stage2-human-signoff.md`). `experiments.yaml` lines 81-88 still demote `abl_fitness_probeact` to `lane: extended` with an explicit "NOT VALIDATED... do not report headline numbers" comment. Checklist text unchanged from the framing described in the task (confirmed by direct read, not memory). |
+| No harmful strings written to any git-tracked path (grep) | **PASS** | `results/ours_smoke.json` (the only new tracked artifact this cycle) contains scalars/counters/paths only — no `template`/`candidate`/`completion` field (full file read, 38 lines, every key enumerated above). `git ls-files \| grep -i prompts` → empty; `results/prompts_ours_smoke_full.jsonl` is not tracked and not even present in this local checkout. `git check-ignore -v results/prompts_ours_smoke_full.jsonl` → matches `.gitignore:10:results/**/prompts_*`. `git grep -niE "api[_-]?key\|sk-[a-zA-Z0-9]{10,}\|secret"` across tracked files (excluding docs referring to the concept) → no live secrets. `git grep -niE "bomb\|explosive\|meth\|synthesize"` across tracked `.py`/`.json`/`.yaml` → no hits (only benign matches: `method`, `method1`). This PASS is now backed by a **real committed artifact**, not just code-design inspection as in the prior cycle. |
 
-## Supporting/independent checks
+## New-field arithmetic check: `guided_fire_count` / `guided_fallback_count` (the specific ask)
 
-**1. `scripts/run_fuzz.py` completeness and correctness**
-- `python3 -m py_compile scripts/run_fuzz.py` → clean, no errors.
-- 875 lines, 28 top-level functions (`ast.parse` walk) — not a stub; covers behavior loading,
-  seed tiers (human/random/bootstrap), guided/uniform mutation, judge and judge+act fitness, UCB1
-  MCTS-lite pool selection, perplexity/self-BLEU/distinct-2 diagnostics, and a full aggregate
-  JSON schema with `_provenance`.
-- `derive_out_path` (lines 160-172) is deterministic and matches `experiments.yaml`'s `produces:`
-  paths for every core-lane job (`ours.json`, `abl_mut_uniform.json`, `abl_seed_bootstrap.json`,
-  `abl_seed_random.json`) and the extended-lane `abl_fitness_probeact.json` — spot-checked all
-  five branches against `experiments.yaml` lines 57-88, consistent.
-- `find_attribution_span` (lines 338-429): confirmed via `git show fa06ebc` and `git show
-  5c31406` that (a) the `offsets_mapping` → `offset_mapping` typo fix is real (diff shows the
-  literal key string change), and (b) the try/except was genuinely widened from covering only
-  the tokenizer call to covering the entire function body through the final `return span_text`
-  (diff shows the whole block re-indented under one `try:`, single `except Exception as e` at
-  line 427-429). This matches the sign-off's and commit messages' claims — **verified true in
-  the current file, not just claimed**.
-- Output-path / side-file split (Section "SAFETY" docstring, lines 22-24, and the actual code at
-  lines 640-649 / 814-818 / 836-864): confirmed by reading the code, not just the docstring, that
-  raw text genuinely never reaches `out_path`.
+`results/ours_smoke.json`: `guided_fire_count=14`, `guided_fallback_count=0`.
 
-**2. `reviews/stage3-human-signoff.md`**
-- Well-formed, dated (2026-08-06), attributed (`muhammed muiz`, email present), git-tracked
-  (`git ls-files | grep stage3` → present).
-- Contains no raw prompt/completion text — aggregate claims only ("3 spot-checked", "ASR=1.0",
-  "100% guided mutation fired"). No secrets, no attack strings.
-- Structurally identical in intent to Stage 1/2 sign-offs **except** for the one thing that
-  matters most for verifiability: Stage 1 and Stage 2 sign-offs each point at a companion
-  `results/*.json` this reviewer can open (`results/sanity.json`,
-  `results/probes/best_layer.json`) as ground truth for the numbers being narrated. This document
-  points at `results/prompts_ours_smoke_full.jsonl` "inspected directly on Kaggle... not present
-  in this local checkout" (line 12-13) as its evidence — by construction (it's gitignored,
-  correctly) that file is *never* going to land in this repo, and it was never meant to. What
-  *should* have landed in this repo, and did not, is the small aggregate
-  `results/ours_smoke.json` — that file is git-tracked by design (`derive_out_path` +
-  `--smoke` naming, `run_fuzz.py` lines 160-172, 719-726) and its absence is the actual gap.
+Reasoning, cross-checked against `scripts/run_fuzz.py`:
+- `run_behavior()`'s loop (lines 572-687) calls `mutate_guided()` exactly once per iteration
+  when `args.method != "gptfuzzer" and args.mutation != "uniform"` (lines 576-586) — true for
+  this run (`method=ours`, `mutation=guided`). The `guided_fired` bool from that single call is
+  the *only* place either counter is touched (lines 583-586); no other call site exists
+  (`grep -n "mutate_guided(" scripts/run_fuzz.py` → defined at 459, called once at 579).
+  So `guided_fire_count + guided_fallback_count` == total iterations actually run across all 5
+  behaviors.
+- Independently, under `--fitness judge` every iteration also increments
+  `counters["full_forward_passes"]` unconditionally (line 603) — no early skip before that
+  point in the loop body. So `full_forward_passes` == total iterations actually run too.
+- Therefore these two independently-derived counters must be equal: `full_forward_passes` ==
+  `guided_fire_count + guided_fallback_count`. Observed: `14 == 14 + 0`. **Checks out exactly,
+  not approximately.**
+- Per-behavior cross-check: behaviors succeed at iterations 3,2,3,3,3 (1-indexed query counts),
+  and the loop `break`s immediately on success (line 677), so no iterations run past a success.
+  Sum = 14, matching both `full_forward_passes` and `guided_fire_count`. No slack, no
+  off-by-one, no impossible arithmetic (e.g. fewer fire+fallback than the 14 iterations that
+  must have run to produce those per-behavior query counts — ruled out, they're exactly equal).
+- `guided_fallback_count=0` is a strong (but not literally impossible) claim — it means
+  `find_attribution_span` (lines 338-429) never hit a degenerate/exception case across all 14
+  calls on real Kaggle data. Plausible given the try/except was widened specifically to fix a
+  real crash (`fa06ebc`, `5c31406`) and 14 is a small sample; not falsifiable further from the
+  aggregate alone, but not internally contradictory either, and it's exactly the "100% guided
+  mutation fired, 0 fallbacks" figure the human sign-off (line 31-32) independently reported
+  from reading the raw jsonl on Kaggle — the two sources agree.
 
-**3. Cross-cutting**
-- Secrets/API keys: `git grep -niE "api[_-]?key|sk-[a-zA-Z0-9]{10,}|secret"` across tracked
-  files (excluding `reviews/`) → no hits.
-- Attack strings in tracked files: no harmful instruction text found; `RANDOM_SEED_TEMPLATES`
-  and prompt-engineering instruction strings in `run_fuzz.py` (lines 61-92) are benign
-  wrapper/meta-instruction text (asking a model to write a *template*), not harmful content
-  themselves — consistent with the file's own comment justifying why these are safe to hardcode.
-- `experiments.yaml`'s `abl_fitness_probeact` job (lines 81-88) still exists, `lane: extended`,
-  `cmd: "... --fitness judge+act"` — confirmed this is the intended future home for the
-  deferred efficiency check, as the sign-off and PLAN.md both claim.
-- Minor secondary finding (not gating, but worth flagging): PLAN.md's stated Stage 3 **Target**
-  is `make ours SMOKE=1`, but the `Makefile` has no `ours` target and no `SMOKE` variable is
-  read anywhere (`grep -n "SMOKE" scripts/run_experiment.py scripts/run_controller.py` → no
-  hits; only entry points are `make job JOB=<id>` and direct `python scripts/run_fuzz.py ...`
-  invocation). The actual smoke run, per the sign-off doc, was launched manually via
-  `python scripts/run_fuzz.py --method ours --mutation guided --seedtier human --fitness judge
-  --smoke`, bypassing both the Makefile's stated target and the "go through the manifest, never
-  launch jobs ad hoc" convention in CLAUDE.md's Orchestration section. This is a smoke test, so
-  ad hoc invocation is defensible in spirit, but PLAN.md's literal `make ours SMOKE=1` target
-  line is currently false/aspirational and should be corrected regardless of the outcome of this
-  gate.
+## Provenance block verification
+
+`results/ours_smoke.json._provenance`: `{"git_sha": "65b5a87", "job": "ours", "config_hash":
+"f72584954c0a58fb", "timestamp": "2026-08-06T00:59:10.510825+00:00"}`.
+
+- `config_hash`: `python3 -c "import hashlib; print(hashlib.sha256(open('configs/exp.yaml','rb').read()).hexdigest()[:16])"` → `f72584954c0a58fb`. **Exact match** against the current `configs/exp.yaml`.
+- `git_sha`: `65b5a87` is a real commit (`git show 65b5a874b9b6e022b424cec7e0f669226236a4ee` resolves, merge commit, parents `85ad432` + `2a6a5f6`).
+- Chronological sanity of the counter code: `2a6a5f6` ("Add guided_fire_count / guided_fallback_count...") is a **parent** of merge commit `65b5a87`. `git show 65b5a87:scripts/run_fuzz.py | grep -n guided_fire_count` → 9 hits, including the `counters["guided_fire_count"] += 1` increment at line 584 and the output-schema keys at lines 884-885. So the counter code was genuinely present and wired in the exact tree the run's `_provenance.git_sha` points at — **not** a case of the JSON claiming a commit that predates the feature it's reporting.
+- Cross-check against the *previous* version of this file (`85ad432`, before the regenerate): `git diff 85ad432 ad3d530 -- results/ours_smoke.json` shows the old version had `git_sha: "5c31406"` (which predates `2a6a5f6` and correctly had **no** `guided_fire_count`/`guided_fallback_count` keys at all) and the new version correctly updated both the git_sha and added the new keys together, with a fresh timestamp (`00:23:59` → `00:59:10`) and slightly different `wall_clock_s`/`wall_clock_full_s` (98.58→97.84, 84.70→84.60) consistent with an actual re-run rather than a hand-edited JSON (all other fields — `asr`, `queries_to_success`, `full_forward_passes`, `mean_prompt_perplexity`, `self_bleu`, `distinct_2` — are byte-identical between the two versions, which is exactly what re-running the same seeded config against the same code should produce for everything except wall-clock timing and the newly-added counters).
+
+## Cross-check: does the human sign-off's narrative now agree with the real numbers, or did anything drift?
+
+`reviews/stage3-human-signoff.md`:
+- "ASR = 1.0 on the 5 smoke behaviors" (line 29) — matches `asr: 1.0` exactly.
+- "Guided mutation fired on 100% of MCTS iterations... 0 fallbacks to uniform mutation" (line 31-32) — matches `guided_fire_count: 14, guided_fallback_count: 0` exactly (14/14 = 100%).
+- No drift found. The sign-off was written before the aggregate JSON existed/was regenerated with the new fields, and the numbers it narrates from the raw jsonl agree with the counters the code independently derived and committed later. This is corroborating evidence, not circular — the sign-off's basis (reading the gitignored jsonl directly on Kaggle) is independent of the code path that produces `guided_fire_count` in the aggregate.
+
+## Re-verification of previously-passing items (checked fresh, not carried forward)
+
+- **`python3 -m py_compile scripts/run_fuzz.py`** → clean, no errors.
+- **`mutate_guided()` return signature**: reads lines 459-487. All three `return` statements return a 2-tuple: `(mutate_uniform(...), False)` (line 471), `(mutate_uniform(...), True)` (line 477), `(new_template, True)` (line 487). No path returns a bare value. Confirmed the *current* file, not the commit message.
+- **Counter wiring**: single call site (`grep -n "mutate_guided(" scripts/run_fuzz.py` → def at 459, one call at 579), guarded by `args.method != "gptfuzzer" and args.mutation != "uniform"` (line 576 is the `if`, guided branch is the `else` at 578) so gptfuzzer/uniform runs never touch these counters (confirmed they stay `0` in the schema comment at lines 785-788, and there's no other increment site).
+- **`find_attribution_span`'s try/except**: still covers the entire function body — single `try:` at line 350 wrapping through the final `return span_text` at line 426, single `except Exception as e` at line 427-429. Unchanged from last review, re-read fresh.
+- **Aggregate JSON schema has no raw text**: `summary` dict (lines 853-888) enumerated field-by-field — `method, mutation, seedtier, fitness, target_model, judge_model, n_behaviors, asr, asr_human_subset, queries_to_success{per_behavior (ints), median}, full_forward_passes, partial_forward_passes, wall_clock_*, mean_prompt_perplexity, self_bleu, distinct_2, guided_fire_count, guided_fallback_count, full_records_file (a path string), _provenance`. No `template`/`candidate`/`completion` key anywhere. Raw per-candidate `records` (containing those fields, lines 651-660) are written only to the gitignored `full_records_file` (lines 830-835), never to `out_path`.
+- **`results/prompts_ours_smoke_full.jsonl` gitignore status**: not tracked (`git ls-files | grep -i prompts` → empty), not present in this checkout, and `.gitignore:10` (`results/**/prompts_*`) would match it if it were regenerated locally.
+- **Secrets/attack strings**: no hits across tracked files (see grep commands above).
+- **`experiments.yaml`'s `abl_fitness_probeact` job**: still present, `lane: extended`, `needs: [probes, direction]`, `cmd: "... --fitness judge+act"`, comment still says "NOT VALIDATED... do not report headline numbers from this job until then" (lines 81-88). Unchanged.
+- **PLAN.md Gate 3 checklist text**: unchanged from the framing given in the task — item 1 checked `[x]`, efficiency item struck out with descope rationale `[ ]` (intentionally left unchecked since it's N/A, not a silent pass), item 3 checked `[x]` (lines 196-203). Confirmed by direct read of the current file, not memory.
+
+## Minor (non-gating) note carried forward, still true
+
+PLAN.md's stated Stage 3 **Target** line (`make ours SMOKE=1`) still does not correspond to any
+real Makefile target or `SMOKE` variable (`grep -n "SMOKE" Makefile` → no hits; the actual
+invocation used was the direct `python scripts/run_fuzz.py --method ours ... --smoke` CLI flag,
+per the human sign-off). This is documentation drift, not a gate-blocking issue, and was flagged
+in the prior review cycle too — recommend fixing before Stage 5 makes this confusing at scale,
+but it does not affect this PASS verdict since the underlying `--smoke` flag on the script itself
+works correctly and produced the artifact under review.
 
 ## Required fixes before Gate 3 can be considered closed
 
-1. **Commit and push the actual run artifact**: `results/ours_smoke.json` (aggregate-only, per
-   `run_fuzz.py`'s own schema) from the Kaggle smoke run the sign-off narrates. Without this file,
-   the ASR=1.0 and "0 fallbacks" numbers in `reviews/stage3-human-signoff.md` are unverifiable
-   assertions, not results.
-2. Push `results/prompts_ours_smoke_full.jsonl` **nowhere** (correctly gitignored) — but do keep
-   it available for a future reviewer/human to re-spot-check if needed; the sign-off doc should
-   say where it lives (Kaggle output artifact / dataset version) if it's not attachable here.
-3. Once `results/ours_smoke.json` exists, re-verify: `asr` field actually reads 1.0,
-   `full_forward_passes` / iteration counts are consistent with "guided mutation fired on 100% of
-   iterations, 0 fallbacks" (note: the current script does not directly log a fallback counter —
-   check whether that specific claim is even derivable from the committed schema, or whether it's
-   purely from the sign-off author's manual reading of the gitignored jsonl; if the latter, say so
-   explicitly rather than presenting it as if backed by the aggregate JSON).
-4. Fix or annotate the `make ours SMOKE=1` Target line in PLAN.md's Stage 3 section to reflect
-   the actual invocation path (`make job JOB=ours` doesn't support `--smoke` either, per
-   `scripts/run_experiment.py`) — either wire `SMOKE` through the Makefile/manifest or correct the
-   documented command.
-5. Re-run `/review` on Stage 3 only after (1) lands; do not re-close the gate on narrative alone.
+None. All checklist items PASS with real, arithmetically-consistent backing artifacts.
