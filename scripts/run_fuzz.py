@@ -458,16 +458,23 @@ def mutate_uniform(template, mutate_tok, mutate_model, device, cfg):
 
 def mutate_guided(template, target_model, target_tok, mutate_tok, mutate_model, device, cfg,
                    directions, dir_layer_idx):
+    """Return (new_template, fired: bool). `fired` is True iff `find_attribution_span` returned a
+    real span (the "guided actually fired vs. fell back to uniform" definition the caller reports
+    in guided_fire_count/guided_fallback_count) -- it does NOT go back to False if the mutator LLM
+    later returns an empty rewrite for that span (a separate, rarer degenerate case below that
+    also ends up using mutate_uniform's rewrite as a substitute, but the ATTRIBUTION step itself
+    still succeeded, which is what "fired" is defined to mean here).
+    """
     span_text = find_attribution_span(template, target_model, target_tok, directions,
                                        dir_layer_idx, device)
     if span_text is None:
-        return mutate_uniform(template, mutate_tok, mutate_model, device, cfg)
+        return mutate_uniform(template, mutate_tok, mutate_model, device, cfg), False
 
     instruction = GUIDED_MUTATE_INSTRUCTION.format(template=template, span=span_text)
     new_span = _mutator_llm_rewrite(instruction, mutate_tok, mutate_model, device, cfg,
                                      max_new_tokens=150)
     if not new_span:
-        return mutate_uniform(template, mutate_tok, mutate_model, device, cfg)
+        return mutate_uniform(template, mutate_tok, mutate_model, device, cfg), True
 
     if span_text in template:
         new_template = template.replace(span_text, new_span, 1)
@@ -477,7 +484,7 @@ def mutate_guided(template, target_model, target_tok, mutate_tok, mutate_model, 
         new_template = template
     if MARKER not in new_template:
         new_template = new_template + "\n" + MARKER
-    return new_template
+    return new_template, True
 
 
 # ---------------------------------------------------------------------------------------------
@@ -569,10 +576,14 @@ def run_behavior(behavior_idx, behavior, seed_templates, cfg, args, device,
         if args.method == "gptfuzzer" or args.mutation == "uniform":
             child_template = mutate_uniform(parent_template, mutate_tok, mutate_model, device, cfg)
         else:
-            child_template = mutate_guided(
+            child_template, guided_fired = mutate_guided(
                 parent_template, target_model, target_tok, mutate_tok, mutate_model, device, cfg,
                 directions, dir_layer_idx,
             )
+            if guided_fired:
+                counters["guided_fire_count"] += 1
+            else:
+                counters["guided_fallback_count"] += 1
 
         candidate = fill_template(child_template, behavior)
         evaluated_texts.append(candidate)
@@ -771,6 +782,12 @@ def main():
         "partial_forward_passes": 0,
         "wall_clock_partial_s": 0.0,
         "wall_clock_full_s": 0.0,
+        # Only incremented when mutate_guided() is actually called (mutation=="guided" and
+        # method!="gptfuzzer") -- stay 0 for uniform-mutation runs, including gptfuzzer, where
+        # "guided vs fallback" isn't a meaningful question. guided_fire_count + guided_fallback_
+        # count == the total number of mutate_guided() calls in the run.
+        "guided_fire_count": 0,
+        "guided_fallback_count": 0,
     }
     records = []  # in-memory, full text -- goes ONLY to the gitignored side file
     per_behavior_queries = []
@@ -859,6 +876,13 @@ def main():
         "mean_prompt_perplexity": mean_ppl,
         "self_bleu": sb,
         "distinct_2": d2,
+        # "guided actually fired vs fell back to uniform" as a committed, auditable metric --
+        # critical for validating the ours vs. abl_mut_uniform comparison (a run where guided
+        # mutation silently fell back to uniform on every iteration would make that ablation
+        # meaningless, and this makes that visible in the artifact instead of only in a
+        # transient Kaggle log). Both stay 0 for non-guided runs (gptfuzzer, --mutation uniform).
+        "guided_fire_count": counters["guided_fire_count"],
+        "guided_fallback_count": counters["guided_fallback_count"],
         "full_records_file": full_records_file,
         "_provenance": provenance,
     }
@@ -867,7 +891,9 @@ def main():
     log.info(f"wrote aggregate-only summary (scalars only, no prompt/completion text) to {out_path}")
     log.info(f"asr={asr:.3f} median_queries_to_success={median_q} "
              f"full_forward_passes={counters['full_forward_passes']} "
-             f"partial_forward_passes={counters['partial_forward_passes']}")
+             f"partial_forward_passes={counters['partial_forward_passes']} "
+             f"guided_fire_count={counters['guided_fire_count']} "
+             f"guided_fallback_count={counters['guided_fallback_count']}")
 
 
 if __name__ == "__main__":
