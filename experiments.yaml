@@ -113,6 +113,201 @@ jobs:
     produces: results/defense_smoothllm.json
     cmd: "python scripts/eval_defense.py --config {config} --defense smoothllm --from results/ours.json"
 
+  # ---- target-difficulty ladder (RQ3, PLAN.md §10) — SCAFFOLD ONLY, DO NOT LAUNCH ----
+  # Added 2026-08-06. Every job below is `lane: extended` on purpose: this is the SAME
+  # mechanism that already keeps autodan/amnesia/etc. out of `run_controller.py`'s default
+  # `--lane core` ready set (see ORCHESTRATION.md's lane semantics) — it is how "don't
+  # launch until the Qwen core lane is done and reviewed" is actually enforced here, not
+  # just a comment. Do not pass `--lane extended`/`--lane all` to the controller for these
+  # until that condition is met.
+  #
+  # Per-target job family = the same 8-job shape as the Qwen tier above (probes, direction,
+  # validate, gptfuzzer, ours, abl_mut_uniform, abl_seed_bootstrap, abl_seed_random),
+  # namespaced under results/<tag>/ via explicit --out/--probes/--direction flags (every
+  # underlying script already supports these overrides — no script changes were needed for
+  # this except one bug fix: run_fuzz.py's full_records_file derivation used to collapse to
+  # basename only, which would have collided across targets' gitignored raw-prompt side
+  # files; now derives from the full --out path, unique per target).
+  #
+  # NOT in the manifest per target, same as the Qwen tier: scripts/sanity_check.py (Stage 1,
+  # baseline refusal) — it was never a manifest job for Qwen either (RUNBOOK.md documents it
+  # as a manual per-config invocation). Run it manually first for each target with
+  # `--config configs/exp_<tag>.yaml` before probes_<tag>/direction_<tag> — same as Stage 1
+  # always has been, just repeated per target since the refusal baseline is target-specific.
+  #
+  # gemma9b additionally has TWO unresolved code blockers before it can run at all — see
+  # configs/exp_gemma9b.yaml's header comment (gated HF access + no device_map="auto"
+  # anywhere in this repo's model-loading code, confirmed via grep 2026-08-06). Scaffolded
+  # here anyway so the manifest shape exists; do not attempt to launch until both are fixed.
+
+  probes_phi4mini:
+    lane: extended
+    needs: []
+    produces: results/phi4mini/probes/best_layer.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/train_probes.py --config {config} --out results/phi4mini/probes"
+
+  direction_phi4mini:
+    lane: extended
+    needs: []
+    produces: results/phi4mini/direction.npz
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/extract_direction.py --config {config} --out results/phi4mini/direction.npz"
+
+  validate_phi4mini:
+    lane: extended
+    needs: [probes_phi4mini, direction_phi4mini]
+    produces: results/phi4mini/validate_signal.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/validate_signal.py --config {config} --out results/phi4mini/validate_signal.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
+
+  gptfuzzer_phi4mini:
+    lane: extended
+    needs: []
+    produces: results/phi4mini/gptfuzzer.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method gptfuzzer --out results/phi4mini/gptfuzzer.json"
+
+  ours_phi4mini:
+    lane: extended
+    needs: [probes_phi4mini, direction_phi4mini]
+    produces: results/phi4mini/ours.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge --out results/phi4mini/ours.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
+
+  abl_mut_uniform_phi4mini:
+    lane: extended
+    needs: [probes_phi4mini, direction_phi4mini]
+    produces: results/phi4mini/abl_mut_uniform.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation uniform --seedtier human --fitness judge --out results/phi4mini/abl_mut_uniform.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
+
+  abl_seed_bootstrap_phi4mini:
+    lane: extended
+    needs: [probes_phi4mini, direction_phi4mini]
+    produces: results/phi4mini/abl_seed_bootstrap.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier bootstrap --fitness judge --out results/phi4mini/abl_seed_bootstrap.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
+
+  abl_seed_random_phi4mini:
+    lane: extended
+    needs: [probes_phi4mini, direction_phi4mini]
+    produces: results/phi4mini/abl_seed_random.json
+    config: configs/exp_phi4mini.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier random --fitness judge --out results/phi4mini/abl_seed_random.json --probes results/phi4mini/probes/probe_best_layer.npz --direction results/phi4mini/direction.npz"
+
+  probes_qwen7b:
+    lane: extended
+    needs: []
+    produces: results/qwen7b/probes/best_layer.json
+    config: configs/exp_qwen7b.yaml
+    cmd: "python scripts/train_probes.py --config {config} --out results/qwen7b/probes"
+
+  direction_qwen7b:
+    lane: extended
+    needs: []
+    produces: results/qwen7b/direction.npz
+    config: configs/exp_qwen7b.yaml
+    cmd: "python scripts/extract_direction.py --config {config} --out results/qwen7b/direction.npz"
+
+  validate_qwen7b:
+    lane: extended
+    needs: [probes_qwen7b, direction_qwen7b]
+    produces: results/qwen7b/validate_signal.json
+    config: configs/exp_qwen7b.yaml
+    cmd: "python scripts/validate_signal.py --config {config} --out results/qwen7b/validate_signal.json --probes results/qwen7b/probes/probe_best_layer.npz --direction results/qwen7b/direction.npz"
+
+  gptfuzzer_qwen7b:
+    lane: extended
+    needs: []
+    produces: results/qwen7b/gptfuzzer.json
+    config: configs/exp_qwen7b.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method gptfuzzer --out results/qwen7b/gptfuzzer.json"
+
+  ours_qwen7b:
+    lane: extended
+    needs: [probes_qwen7b, direction_qwen7b]
+    produces: results/qwen7b/ours.json
+    config: configs/exp_qwen7b.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge --out results/qwen7b/ours.json --probes results/qwen7b/probes/probe_best_layer.npz --direction results/qwen7b/direction.npz"
+
+  abl_mut_uniform_qwen7b:
+    lane: extended
+    needs: [probes_qwen7b, direction_qwen7b]
+    produces: results/qwen7b/abl_mut_uniform.json
+    config: configs/exp_qwen7b.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation uniform --seedtier human --fitness judge --out results/qwen7b/abl_mut_uniform.json --probes results/qwen7b/probes/probe_best_layer.npz --direction results/qwen7b/direction.npz"
+
+  abl_seed_bootstrap_qwen7b:
+    lane: extended
+    needs: [probes_qwen7b, direction_qwen7b]
+    produces: results/qwen7b/abl_seed_bootstrap.json
+    config: configs/exp_qwen7b.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier bootstrap --fitness judge --out results/qwen7b/abl_seed_bootstrap.json --probes results/qwen7b/probes/probe_best_layer.npz --direction results/qwen7b/direction.npz"
+
+  abl_seed_random_qwen7b:
+    lane: extended
+    needs: [probes_qwen7b, direction_qwen7b]
+    produces: results/qwen7b/abl_seed_random.json
+    config: configs/exp_qwen7b.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier random --fitness judge --out results/qwen7b/abl_seed_random.json --probes results/qwen7b/probes/probe_best_layer.npz --direction results/qwen7b/direction.npz"
+
+  probes_gemma9b:                # BLOCKED on device_map fix + HF gate access — see header note
+    lane: extended
+    needs: []
+    produces: results/gemma9b/probes/best_layer.json
+    config: configs/exp_gemma9b.yaml
+    cmd: "python scripts/train_probes.py --config {config} --out results/gemma9b/probes"
+
+  direction_gemma9b:             # BLOCKED on device_map fix + HF gate access — see header note
+    lane: extended
+    needs: []
+    produces: results/gemma9b/direction.npz
+    config: configs/exp_gemma9b.yaml
+    cmd: "python scripts/extract_direction.py --config {config} --out results/gemma9b/direction.npz"
+
+  validate_gemma9b:
+    lane: extended
+    needs: [probes_gemma9b, direction_gemma9b]
+    produces: results/gemma9b/validate_signal.json
+    config: configs/exp_gemma9b.yaml
+    cmd: "python scripts/validate_signal.py --config {config} --out results/gemma9b/validate_signal.json --probes results/gemma9b/probes/probe_best_layer.npz --direction results/gemma9b/direction.npz"
+
+  gptfuzzer_gemma9b:              # BLOCKED on device_map fix + HF gate access — see header note
+    lane: extended
+    needs: []
+    produces: results/gemma9b/gptfuzzer.json
+    config: configs/exp_gemma9b.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method gptfuzzer --out results/gemma9b/gptfuzzer.json"
+
+  ours_gemma9b:
+    lane: extended
+    needs: [probes_gemma9b, direction_gemma9b]
+    produces: results/gemma9b/ours.json
+    config: configs/exp_gemma9b.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier human --fitness judge --out results/gemma9b/ours.json --probes results/gemma9b/probes/probe_best_layer.npz --direction results/gemma9b/direction.npz"
+
+  abl_mut_uniform_gemma9b:
+    lane: extended
+    needs: [probes_gemma9b, direction_gemma9b]
+    produces: results/gemma9b/abl_mut_uniform.json
+    config: configs/exp_gemma9b.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation uniform --seedtier human --fitness judge --out results/gemma9b/abl_mut_uniform.json --probes results/gemma9b/probes/probe_best_layer.npz --direction results/gemma9b/direction.npz"
+
+  abl_seed_bootstrap_gemma9b:
+    lane: extended
+    needs: [probes_gemma9b, direction_gemma9b]
+    produces: results/gemma9b/abl_seed_bootstrap.json
+    config: configs/exp_gemma9b.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier bootstrap --fitness judge --out results/gemma9b/abl_seed_bootstrap.json --probes results/gemma9b/probes/probe_best_layer.npz --direction results/gemma9b/direction.npz"
+
+  abl_seed_random_gemma9b:
+    lane: extended
+    needs: [probes_gemma9b, direction_gemma9b]
+    produces: results/gemma9b/abl_seed_random.json
+    config: configs/exp_gemma9b.yaml
+    cmd: "python scripts/run_fuzz.py --config {config} --method ours --mutation guided --seedtier random --fitness judge --out results/gemma9b/abl_seed_random.json --probes results/gemma9b/probes/probe_best_layer.npz --direction results/gemma9b/direction.npz"
+
   # ---- reporting ----
   figures:
     lane: core

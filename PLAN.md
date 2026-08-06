@@ -283,25 +283,126 @@ loses your results.
 - [ ] All 4 prior works cited and distinguished; closest competitor named in the abstract's
       differentiation sentence.
 
-## 10. Future work / planned extensions
+## 10. Target-difficulty ladder (RQ3) — planned core part of the paper
 
-**Not scheduled yet — do not start before the core lane (Stages 0–7) is done and reviewed.**
+**Status (2026-08-06): PLANNED CORE, not "maybe later."** Superseded the original framing of
+this section (extended-lane, indefinite). Sequencing still matters, though: **do not launch any
+target below until the Qwen2.5-3B core lane (Stages 4–7) is complete and reviewed** — Qwen is the
+"easy/control" tier this whole axis is measured relative to, and it's the only tier with a full
+reviewed matrix so far. `experiments.yaml`/`configs/` are scaffolded (see below); the manifest
+jobs are `lane: extended` specifically so the normal `run_controller.py --lane core` workflow
+cannot accidentally launch them — that flag flip (or explicit `--lane all`) is the actual trigger
+for "sequenced after Qwen lane completes," not just a comment.
 
-- **Target-difficulty axis (serves RQ3).** Once the core matrix works end-to-end on
-  `Qwen2.5-3B-Instruct`, extend RQ3 beyond single-target transfer by running the full method
-  directly (white-box) on progressively harder, more safety-tuned open-weight targets —
-  `Llama-3.1-8B-Instruct`, then `Gemma-2-9B-it` — and report ASR as a function of target
-  robustness. This is a genuine additional axis, not a rerun of the existing
-  `transfer_target_local` black-box replay: each new target gets its own probes/direction
-  extraction and its own full fuzzing run, since the method is white-box and needs activations
-  from the model actually being attacked.
-  - **Scope boundary:** all targets stay open-weight. Closed/API-only models are out of scope by
-    threat model — the method requires activation access, so it cannot target a closed API
-    regardless of interest.
-  - **Config-driven, not hardcoded:** implement by swapping `configs/exp.yaml`'s `target_model`
-    (same pattern already used for the model swap comment at the top of that file) and re-running
-    the `probes → direction → validate → ours` chain per target — do not special-case new target
-    strings inside any script.
-  - Belongs in the EXTENDED lane once picked up (see `ORCHESTRATION.md`'s core/extended split);
-    likely a new `experiments.yaml` job family (e.g. `ours_llama8b`, `ours_gemma9b`) parameterized
-    by target rather than a new script.
+**Difficulty is measured empirically in our own setting, not cited from literature** — jailbreak
+difficulty is attack- and category-dependent, so a number from a different judge/method/benchmark
+isn't a defensible ordering here. Smoke-test each target first (5 behaviors × 5 methods) before
+committing it to a full run; if a target saturates at ASR≈1.0 in ~3 queries like Qwen did, it adds
+nothing over the control and should be dropped.
+
+### Tier table
+
+| Tier | Model | Gated? | VRAM strategy | Config |
+|---|---|---|---|---|
+| easy / control | `Qwen/Qwen2.5-3B-Instruct` | No | 1×T4, fp16 (~6GB) | `configs/exp.yaml` (running now) |
+| same-size / family | `microsoft/Phi-4-mini-instruct` | No | 1×T4, fp16 (~8GB) | `configs/exp_phi4mini.yaml` |
+| larger / same-family | `Qwen/Qwen2.5-7B-Instruct` | No | 1×T4, fp16 (~14GB, tight) | `configs/exp_qwen7b.yaml` |
+| **HARD (capstone)** | `google/gemma-2-9b-it` | **Yes (manual)** | **both T4s**, fp16, `device_map="auto"` | `configs/exp_gemma9b.yaml` |
+
+`mistralai/Mistral-7B-Instruct-v0.3` is optional, budget-permitting only — first to drop if GPU
+budget runs short.
+
+**Dropped, with reasons:** `Llama-3.1-8B-Instruct` (HF-gated AND ~16–18GB fp16, over one T4 —
+Gemma is the better-evidenced hard target, no need for both). `gpt-oss-120b` (~240GB fp16,
+impossible on a T4). `gpt-oss-20b` (would require 4-bit quantization, which is explicitly
+disallowed here — see below).
+
+**Gemma-2-9B-IT is the designated hard target and the insurance policy against this axis showing
+nothing:** it has the only consistent, citable difficulty gap among the candidates considered
+(reported ~8% ASR vs. Llama-3.1's ~22% on HarmBench). Sequenced **last** — if the ungated mid-tier
+(Phi-4-mini, Qwen2.5-7B) already shows real headroom over Qwen's saturation, Gemma is a bonus; if
+they all saturate the way Qwen did, Gemma is what makes the difficulty-axis claim defensible at
+all. Two blockers must be resolved before it can run (confirmed 2026-08-06, not yet fixed — see
+`configs/exp_gemma9b.yaml`'s header comment):
+1. Gated on Hugging Face (verified live, `gated: "manual"`) — request access ahead of time,
+   approval isn't instant.
+2. Every model-loading script in this repo (`run_fuzz.py`, `train_probes.py`,
+   `extract_direction.py`, `sanity_check.py`, `validate_signal.py`, `probe_novel_check.py`)
+   currently hardcodes single-GPU (`device = "cuda" if ... else "cpu"` → `.to(device)`), confirmed
+   via grep — none use `device_map`. `scripts/run_parallel.sh` also assumes two independent
+   single-GPU jobs (`CUDA_VISIBLE_DEVICES=0`/`=1`), which doesn't fit a one-job-both-GPUs run
+   either. Both need fixing before Gemma can be attempted; not done yet, scaffold only.
+
+**FP16 is non-negotiable across every tier — never quantize.** The refusal direction was
+validated in fp16 (Stage 2); quantization would corrupt the activation signal the whole method
+depends on. For any VRAM-tight target, split across both T4s via `device_map="auto"` instead of
+reaching for 4-bit/8-bit.
+
+### Per-target pipeline cost
+
+Each new target needs its own Stage 1 (baseline refusal, `sanity_check.py`) and Stage 2
+(`train_probes.py` + `extract_direction.py`, plus Gate 2's novel-prompt check) re-run — the
+refusal direction is model-specific, not transferable across targets. Budget for this; it is not
+optional plumbing.
+
+### Rigor requirements (this is what makes the result strong on a free-tier budget, not model
+count)
+
+- **3 seeds per (target × method) condition.** Non-negotiable — single-run ASR/queries-to-success
+  numbers will not survive review. Report ASR and median-queries with 95% bootstrap or Wilson
+  confidence intervals.
+- Full queries-to-success distribution (quartiles), not just the median.
+- Per-AdvBench-category ASR breakdown — guided mutation may help disproportionately on hard
+  categories even when overall ASR ties with the uniform-mutation ablation.
+- `guided_fire_count`/`guided_fallback_count` (already in `run_fuzz.py`'s output schema, added
+  2026-08-06) committed per run as proof guided mutation actually fired, not silently fell back to
+  uniform on every iteration.
+
+### Budget reality — Kaggle free tier only (~30 GPU-hr/week)
+
+Depth over breadth: 2–3 targets with real 3-seed confidence intervals beats 4 targets run once.
+If budget runs short, cut targets (Mistral first, then Qwen2.5-7B) before ever cutting seed count
+or CIs. Spread across multiple weeks if needed. Gemma runs consume both T4s for one job — no
+parallel second job during those sessions, effectively half throughput; budget for it explicitly
+rather than being surprised by it.
+
+**Worked GPU-hour estimate (2026-08-06).** Anchored on the ONE real measured data point available
+at scaffold time — `results/ours_smoke.json`: 84.6s / 14 full queries = **6.04s/query, measured,
+Qwen2.5-3B, 1×T4**. Everything else below is a labeled estimate (linear-in-params scaling for
+model size, +50% for Gemma's dual-GPU pipeline-split overhead — naive `device_map="auto"` sharding
+does not give a 2x speedup for single-sequence autoregressive decoding, sometimes a slowdown), not
+measured — replace with each target's own real smoke-test number before committing further
+budget to it.
+
+Full 5-method matrix, 50 behaviors, ×3 seeds, in GPU-hours (= wall-clock × number of GPUs used):
+
+| Target | best case (~3 q/behavior, Qwen-like) | realistic (~30 q/behavior avg) | worst case (full 50-q budget every time) |
+|---|---:|---:|---:|
+| Qwen2.5-3B (1 GPU) | 3.8 | 37.8 | 63.0 |
+| Phi-4-mini (1 GPU) | 4.8 | 48.0 | 79.9 |
+| Qwen2.5-7B (1 GPU) | 8.8 | 88.0 | 146.9 |
+| Gemma-2-9B (2 GPUs) | 17.0 | 340.0 | 566.5 |
+
+Stage 1–2 per target (sanity + probes + direction, rough — none of those three scripts log
+`wall_clock_s` yet, unlike `run_fuzz.py`) is small by comparison: **~0.15–0.75 GPU-hr**, growing
+with target size; not the budget bottleneck.
+
+**Reading this table:** even the "realistic" column for all 4 targets × 3 seeds sums to roughly
+**500+ GPU-hours ≈ 17 weeks** at 30/week — confirms the "depth over breadth, cut targets before
+cutting seeds" rule above is load-bearing, not caution for its own sake. In practice: smoke-test
+each target for real numbers, then decide tier-by-tier whether it earns its 3-seed budget, cutting
+from the bottom of the tier table first.
+
+### Implementation notes
+
+- Config-driven, not hardcoded: one `configs/exp_<tag>.yaml` per tier (`configs/exp.yaml` stays
+  the Qwen/control config, unchanged), identical to it in every invariant except
+  `target_model`/`mutate_model` — see CLAUDE.md rule 3.
+- `experiments.yaml` job family per target: `probes_<tag>`, `direction_<tag>`, `validate_<tag>`,
+  `gptfuzzer_<tag>`, `ours_<tag>`, `abl_mut_uniform_<tag>`, `abl_seed_bootstrap_<tag>`,
+  `abl_seed_random_<tag>` — same 8-job shape as the Qwen tier, results namespaced under
+  `results/<tag>/`. No underlying script needed code changes to support this (every script
+  already accepted explicit `--out`/`--probes`/`--direction` overrides) except one real bug fix:
+  `run_fuzz.py`'s gitignored raw-prompt side-file path used to derive from `--out`'s basename
+  only, which would have silently collided across two different targets' runs; it now derives
+  from the full relative `--out` path instead.

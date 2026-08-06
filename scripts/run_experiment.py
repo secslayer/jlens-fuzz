@@ -39,7 +39,13 @@ def main():
         if not os.path.exists(p):
             sys.exit(f"[dispatch] job '{args.job}' needs '{dep}' but {p} is missing. run it first.")
 
-    cmd = job["cmd"].format(**defaults)
+    # Per-job `config:` override (target-difficulty ladder, PLAN.md §10): a job can point at a
+    # different configs/exp_*.yaml than the manifest default, e.g. to run the core matrix against
+    # a harder target. Job-level value wins; everything else still comes from `defaults`.
+    fmt_vars = dict(defaults)
+    if "config" in job:
+        fmt_vars["config"] = job["config"]
+    cmd = job["cmd"].format(**fmt_vars)
     print(f"[dispatch] {args.job} @ {git_sha()}  ->  {cmd}")
     # Underlying scripts are responsible for writing the `_provenance` block into their JSON
     # (git sha, config hash, job id, timestamp) — see CLAUDE.md.

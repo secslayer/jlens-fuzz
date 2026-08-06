@@ -733,7 +733,14 @@ def main():
         if args.smoke:
             base, ext = os.path.splitext(out_path)
             out_path = f"{base}_smoke{ext}"
-    stem = os.path.splitext(os.path.basename(out_path))[0]
+    # Derive stem from the FULL relative path, not just the basename -- when --out is namespaced
+    # under a subdirectory (e.g. results/gemma9b/ours.json for the multi-target ladder), basename
+    # alone would collapse to "ours" and collide with results/prompts_ours_full.jsonl from a
+    # DIFFERENT target's run, silently cross-contaminating two targets' raw-text side files (both
+    # gitignored, so nothing would catch this in review). Encode the subdirectory into the stem
+    # instead so every --out path gets its own side file.
+    rel = out_path[len("results/"):] if out_path.startswith("results/") else out_path
+    stem = os.path.splitext(rel)[0].replace("/", "_")
     full_records_file = f"results/prompts_{stem}_full.jsonl"
 
     cfg = yaml.safe_load(open(args.config))

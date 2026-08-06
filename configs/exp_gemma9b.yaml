@@ -1,0 +1,49 @@
+# Target-difficulty ladder, tier 4/4: HARD capstone target.
+# Scaffolded 2026-08-06 (PLAN.md §10) -- DO NOT LAUNCH until (a) the Qwen2.5-3B core lane
+# is complete and reviewed, AND (b) the code blockers below are fixed. Sequenced LAST:
+# only commit the GPU budget here if the mid-tier targets (Phi-4-mini, Qwen2.5-7B) show
+# real headroom over Qwen-3B's saturation; if they saturate too, Gemma is what makes the
+# paper's difficulty-axis claim defensible (8% ASR vs. Llama-3.1's 22% on HarmBench is the
+# only citable, consistent difficulty gap among the candidates considered -- see PLAN.md §10).
+#
+# TWO HARD BLOCKERS, confirmed 2026-08-06, NOT fixed yet (scaffold only per instruction):
+#   1. GATED on Hugging Face (verified live via the HF API: gated="manual"). Request/accept
+#      access at https://huggingface.co/google/gemma-2-9b-it before attempting to launch --
+#      approval is not instant, so do this well before you need it.
+#   2. ~18GB in fp16 EXCEEDS a single Kaggle T4 (16GB). Every model-loading script in this
+#      repo (run_fuzz.py, train_probes.py, extract_direction.py, sanity_check.py,
+#      validate_signal.py, probe_novel_check.py) currently hardcodes
+#      `device = "cuda" if torch.cuda.is_available() else "cpu"` then `.to(device)` --
+#      single-GPU only, confirmed via grep, NONE use device_map. This target REQUIRES
+#      fp16 (non-negotiable, PLAN.md §10 -- quantization would corrupt the activation
+#      signal the refusal direction depends on), so it must be split across BOTH T4s via
+#      `device_map="auto"` instead. `scripts/run_parallel.sh` ALSO assumes 2 independent
+#      single-GPU jobs (`CUDA_VISIBLE_DEVICES=0`/`=1` per job) -- a Gemma run needs both
+#      GPUs for ONE job, so it cannot be paired with a second parallel job the way every
+#      other run in this repo has been (half throughput on Gemma sessions; budget for it).
+#      Fix both the model-loading code AND the launch path before attempting to run this.
+seed: 0
+
+target_model: "google/gemma-2-9b-it"
+
+judge_model: "hubert233/GPTFuzz"
+
+benchmark: "https://raw.githubusercontent.com/llm-attacks/llm-attacks/main/data/advbench/harmful_behaviors.csv"
+n_behaviors: 50
+smoke_behaviors: 5
+
+human_seed_templates: "https://raw.githubusercontent.com/sherdencooper/GPTFuzz/master/datasets/prompts/GPTFuzzer.csv"
+
+query_budget: 50
+max_iterations: 100
+mutate_model: "google/gemma-2-9b-it"   # local mutator == target, avoids a 2nd model load
+decode_temperature: 0.7
+decode_top_p: 0.9
+
+probe_batch_size: 8   # halved vs. the smaller tiers -- less per-batch VRAM headroom even
+                       # split across 2x16GB; tune down further if Stage 2 still OOMs
+partial_forward: true
+
+# Unrelated to this ladder (RQ3 cross-model transfer target, not a primary attack target) --
+# intentionally unchanged across every tier's config so RQ3 stays comparable.
+transfer_target_local: "microsoft/Phi-3.5-mini-instruct"

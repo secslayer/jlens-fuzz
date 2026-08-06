@@ -1,0 +1,32 @@
+# Target-difficulty ladder, tier 2/4: "same-size/family" control.
+# Scaffolded 2026-08-06 (PLAN.md §10) -- DO NOT LAUNCH until the Qwen2.5-3B core lane
+# (Stages 4-7, configs/exp.yaml) is complete and reviewed. Every invariant below is
+# identical to configs/exp.yaml except target_model/mutate_model -- see CLAUDE.md rule 3
+# and configs/exp.yaml's own header comment: cross-target ASR comparisons are only valid
+# if judge/benchmark/budget/decoding stay fixed and only the target varies.
+seed: 0
+
+# ~3.8B params, ungated. ~8GB in fp16, fits a single T4 (16GB) comfortably alongside
+# activation/KV-cache overhead -- no device_map needed for this tier.
+target_model: "microsoft/Phi-4-mini-instruct"
+
+judge_model: "hubert233/GPTFuzz"
+
+benchmark: "https://raw.githubusercontent.com/llm-attacks/llm-attacks/main/data/advbench/harmful_behaviors.csv"
+n_behaviors: 50
+smoke_behaviors: 5
+
+human_seed_templates: "https://raw.githubusercontent.com/sherdencooper/GPTFuzz/master/datasets/prompts/GPTFuzzer.csv"
+
+query_budget: 50
+max_iterations: 100
+mutate_model: "microsoft/Phi-4-mini-instruct"   # local mutator == target, avoids a 2nd model load
+decode_temperature: 0.7
+decode_top_p: 0.9
+
+probe_batch_size: 16
+partial_forward: true
+
+# Unrelated to this ladder (RQ3 cross-model transfer target, not a primary attack target) --
+# intentionally unchanged across every tier's config so RQ3 stays comparable.
+transfer_target_local: "microsoft/Phi-3.5-mini-instruct"
