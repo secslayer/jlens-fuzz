@@ -28,7 +28,8 @@ seed: 0
 
 target_model: "google/gemma-2-9b-it"
 
-judge_model: "hubert233/GPTFuzz"
+judge_model: "hubert233/GPTFuzz"           # diagnostic score only, see configs/exp.yaml's comment
+judge_llm_model: "microsoft/Phi-3.5-mini-instruct"   # kept in sync though unused (dropped tier)
 
 benchmark: "https://raw.githubusercontent.com/llm-attacks/llm-attacks/main/data/advbench/harmful_behaviors.csv"
 n_behaviors: 25             # kept in sync with the locked core (was 50)

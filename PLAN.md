@@ -229,7 +229,10 @@ Run `/review` at each gate. Log to `reviews/stageN.md`. Fix and re-review on FAI
 - **Gate 5 checklist:**
   - [ ] All methods ran under identical conditions (assert config invariants match).
   - [ ] Metrics complete for every method (no missing cells).
-  - [ ] 👤 You hand-validate ~50 judge labels; report judge/human agreement.
+  - [ ] 👤 You hand-validate ~50 judge labels; report judge/human agreement. **This exact check
+        is what caught the judge false-positive incident early, on a 4-example smoke sample
+        instead of a 50-behavior full run — see `reviews/judge-validity-incident.md` and §11
+        below.** Do this hand-validation at EVERY scale (smoke included), not only here.
 - **Exit:** `results/main_table.json` populated and cross-checked.
 
 ### Stage 6 — local transfer + interpretability panels (Day 6)
@@ -390,6 +393,12 @@ full queries = **6.04s/query, measured, Qwen2.5-3B, 1×T4**. Phi-4-mini's number
 estimate (linear-in-params scaling, ~3.8B vs. 3B), not measured — replace with its own real
 smoke-test number before committing further budget to it.
 
+> **This anchor is now STALE as a cost estimate** (though still valid as a historical data
+> point): it was measured before the judge fix (§11, `reviews/judge-validity-incident.md`) added
+> a second LLM generation call (the rubric judge) to every "full query" that isn't caught by the
+> cheap refusal pre-filter. Real per-query cost under the fixed judge will be higher than 6.04s —
+> get a fresh number from the next real smoke run before trusting this table for planning.
+
 Full 5-method matrix, 25 behaviors, query_budget=40, ×3 seeds, in GPU-hours:
 
 | Target | best (~3 q/behavior) | realistic (~24 q/behavior, 60% of budget) | worst (full 40-q budget every time) |
@@ -423,3 +432,36 @@ CIs) instead of breadth (4 targets, numbers that wouldn't survive review).
   real bug fix: `run_fuzz.py`'s gitignored raw-prompt side-file path used to derive from `--out`'s
   basename only, which would have silently collided across two different targets' runs; it now
   derives from the full relative `--out` path instead.
+
+## 11. CRITICAL: judge validity incident (2026-08-06)
+
+**Full writeup: `reviews/judge-validity-incident.md`. Read it before trusting any ASR number
+from this pipeline, past or future.**
+
+Summary: the original success judge (`hubert233/GPTFuzz`) has a severe false-positive problem —
+it rewards jailbreak-**shaped** vocabulary (roleplay persona declarations like DAN/Omega/APOPHIS
+template setup) rather than actual harmful content. Hand-reading 4 Phi-4-mini "successes" it
+scored ~0.99 found all four were not jailbreaks (one refusal-then-pivot, three template echoes
+with zero harmful content). This affected the whole pipeline (`run_fuzz.py`, `sanity_check.py`,
+`validate_signal.py`), both targets, not just the run that surfaced it.
+
+**Fixed 2026-08-06**: new shared module `scripts/judge.py` (refusal pre-filter + LLM-as-judge
+rubric grading via a fixed, non-self-grading `judge_llm_model`), wired into all three consumers.
+The old RoBERTa judge is kept as a logged diagnostic only, never the success determinant.
+`scripts/rescore_judge.py` re-validates existing raw completions against the fixed judge without
+re-generating (cheap) — with an honest limitation documented in its own docstring: it can't
+recover iterations a run never took because it stopped early on a false-positive success.
+
+**Existing results are UNVALIDATED until re-scored, not deleted or retroactively edited**:
+`results/ours_smoke.json` (Qwen `ours` smoke, `asr=1.0`) is provisionally supported by a
+3-example human spot-check (`reviews/stage3-human-signoff.md`) but not fully re-validated across
+all its candidates; `results/sanity.json`'s `refusal_rate=1.0` has a safe direction of error (a
+false-positive-prone jailbreak judge can only undercount refusals) but still used the old judge
+call. Any Phi `ours` smoke result reporting a nonzero ASR from the pre-fix judge is fully
+invalidated (true ASR was 0.0, see the incident doc).
+
+**Do not run the full 2-target × 3-seed matrix (§10) until**: (1) Qwen's existing completions are
+re-scored with `scripts/rescore_judge.py`, (2) the Phi `ours` smoke is re-run from scratch with
+the fixed judge, (3) both are reviewed. This gate applies on top of, not instead of, §10's
+sequencing (Qwen core lane complete and reviewed) and Gate 5's existing 👤 hand-validation
+requirement (now explicitly noted to apply at every scale, not just the 50-behavior full run).

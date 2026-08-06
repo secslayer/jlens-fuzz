@@ -14,7 +14,8 @@ seed: 0
 # PLAN.md §10 -- it would corrupt the activation signal the refusal direction depends on).
 target_model: "Qwen/Qwen2.5-7B-Instruct"
 
-judge_model: "hubert233/GPTFuzz"
+judge_model: "hubert233/GPTFuzz"           # diagnostic score only, see configs/exp.yaml's comment
+judge_llm_model: "microsoft/Phi-3.5-mini-instruct"   # kept in sync though unused (dropped tier)
 
 benchmark: "https://raw.githubusercontent.com/llm-attacks/llm-attacks/main/data/advbench/harmful_behaviors.csv"
 n_behaviors: 25             # kept in sync with the locked core (was 50)

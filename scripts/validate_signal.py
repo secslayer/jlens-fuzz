@@ -34,6 +34,7 @@ import random
 import subprocess
 from datetime import datetime, timezone
 
+import judge as judge_mod  # scripts/judge.py -- shared, see its docstring for the incident
 import numpy as np
 import pandas as pd
 import torch
@@ -144,7 +145,11 @@ def load_target(model_id, device):
 
 
 def load_judge(model_id, device):
-    log.info(f"loading judge model {model_id} on {device}")
+    """DIAGNOSTIC ONLY as of 2026-08-06 (see scripts/judge.py). This script's whole purpose is
+    checking whether probe/direction scores correlate with ACTUAL refusal -- if the ground-truth
+    label itself came from an unreliable judge, probe_auc/direction_auc below would be measuring
+    correlation against noise. Do not use this judge's verdict for `actual_refused`."""
+    log.info(f"loading DIAGNOSTIC judge model {model_id} on {device}")
     tok = AutoTokenizer.from_pretrained(model_id)
     model = AutoModelForSequenceClassification.from_pretrained(model_id).to(device).eval()
     return tok, model
@@ -193,7 +198,9 @@ def generate_completion(model, tok, behavior, device, temperature, top_p, max_ne
 
 @torch.no_grad()
 def judge_completion(judge_tok, judge_model, completion, device):
-    """Return (is_jailbroken: bool, score: float) -- score is P(jailbroken).
+    """DIAGNOSTIC ONLY (see scripts/judge.py). Return (is_jailbroken: bool, score: float) --
+    score is P(jailbroken). Logged for comparison; MUST NOT be used for `actual_refused` --
+    use judge_mod.judge_success() for that.
 
     Positive class (label 1) of hubert233/GPTFuzz = the completion is a successful jailbreak.
     refused = NOT is_jailbroken. Same pattern as scripts/sanity_check.py.
@@ -271,6 +278,7 @@ def main():
 
     target_tok, target_model = load_target(target_model_id, device)
     judge_tok, judge_model = load_judge(cfg["judge_model"], device)
+    judge_llm_tok, judge_llm_model = judge_mod.load_judge_llm(cfg["judge_llm_model"], device)
 
     probe_scores, direction_scores, actual_refused = [], [], []
     per_example = []
@@ -288,8 +296,11 @@ def main():
             target_model, target_tok, behavior, device,
             temperature=cfg["decode_temperature"], top_p=cfg["decode_top_p"],
         )
-        is_jailbroken, judge_score = judge_completion(judge_tok, judge_model, completion, device)
-        refused = not is_jailbroken
+        _, roberta_score = judge_completion(judge_tok, judge_model, completion, device)
+        verdict = judge_mod.judge_success(
+            behavior, completion, judge_llm_tok, judge_llm_model, device
+        )
+        refused = not verdict["success"]
 
         probe_scores.append(probe_score)
         direction_scores.append(direction_score)
@@ -298,13 +309,15 @@ def main():
             "index": i,
             "probe_score": probe_score,
             "direction_score": direction_score,
-            "judge_score": judge_score,
-            "actual_refused": bool(refused),
+            "roberta_judge_score": roberta_score,   # DIAGNOSTIC ONLY, see scripts/judge.py
+            "refusal_prefilter": verdict["refusal_prefilter"],
+            "llm_verdict": verdict["llm_verdict"],
+            "actual_refused": bool(refused),         # ground truth, from the TRUSTED judge
         })
         log.info(
             f"[{i+1}/{len(behaviors)}] probe_score={probe_score:.3f} "
             f"direction_score={direction_score:.3f} actual_refused={refused} "
-            f"judge_score={judge_score:.3f}"
+            f"roberta_score={roberta_score:.3f} llm_verdict={verdict['llm_verdict']}"
         )
 
     y = np.array(actual_refused, dtype=int)
@@ -347,7 +360,8 @@ def main():
 
     summary = {
         "target_model": target_model_id,
-        "judge_model": cfg["judge_model"],
+        "judge_model": cfg["judge_model"],           # DIAGNOSTIC judge, see scripts/judge.py
+        "judge_llm_model": cfg["judge_llm_model"],    # the actual ground-truth determinant
         "probe_layer": probe_layer,
         "direction_layer": dir_layer,
         "n_eval": len(behaviors),

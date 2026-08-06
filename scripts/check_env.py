@@ -56,6 +56,7 @@ REQUIRED_CONFIG_KEYS = [
     "seed",
     "target_model",
     "judge_model",
+    "judge_llm_model",
     "benchmark",
     "human_seed_templates",
     "n_behaviors",

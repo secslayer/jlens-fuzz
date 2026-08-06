@@ -10,7 +10,15 @@ seed: 0
 # activation/KV-cache overhead -- no device_map needed for this tier.
 target_model: "microsoft/Phi-4-mini-instruct"
 
+# CRITICAL FINDING (2026-08-06): false-positive judge, kept as a diagnostic score only --
+# judge_llm_model below is the actual success determinant. See configs/exp.yaml's comment.
 judge_model: "hubert233/GPTFuzz"
+
+# Same fixed rubric judge as configs/exp.yaml, for cross-target comparability (CLAUDE.md rule
+# 3). NOTE: Phi-3.5-mini judging Phi-4-mini-instruct completions is same-VENDOR but NOT
+# self-grading -- different checkpoint, different training run, different capability tier.
+# Flagged here explicitly since it's more directly relevant on this config than on Qwen's.
+judge_llm_model: "microsoft/Phi-3.5-mini-instruct"
 
 benchmark: "https://raw.githubusercontent.com/llm-attacks/llm-attacks/main/data/advbench/harmful_behaviors.csv"
 # Locked 2026-08-06 to the affordable core design -- must match configs/exp.yaml exactly.

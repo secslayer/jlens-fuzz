@@ -14,6 +14,7 @@ def test_exp_config_has_required_invariant_keys():
         "seed",
         "target_model",
         "judge_model",
+        "judge_llm_model",
         "benchmark",
         "human_seed_templates",
         "n_behaviors",
