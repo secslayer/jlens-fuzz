@@ -460,8 +460,32 @@ false-positive-prone jailbreak judge can only undercount refusals) but still use
 call. Any Phi `ours` smoke result reporting a nonzero ASR from the pre-fix judge is fully
 invalidated (true ASR was 0.0, see the incident doc).
 
+**Status update (2026-08-06):**
+- Fix **reported validated**: re-scoring the Phi `ours` smoke's existing completions flipped all
+  4 recorded "successes" to failure (`0.8 → 0.0`) — consistent with the hand-read diagnosis, but
+  the backing `results/rescore_*.json` hasn't landed in the repo yet, so treat as reported-not-
+  yet-artifact-backed per CLAUDE.md rule 2. See the incident doc's Validation section.
+- A **second blocker** surfaced and was fixed: the first live fresh-judge smoke OOM'd (target +
+  judge_llm + diagnostic judge together exceed one T4). Fixed by loading the judge in 8-bit
+  (`scripts/judge.py`, `bitsandbytes`) — judge-only, the target stays fp16 always. Deliberately
+  not fixed by a second GPU (would break `run_parallel.sh`'s per-job GPU pinning and halve
+  throughput for every judged run). See the incident doc for why.
+
 **Do not run the full 2-target × 3-seed matrix (§10) until**: (1) Qwen's existing completions are
-re-scored with `scripts/rescore_judge.py`, (2) the Phi `ours` smoke is re-run from scratch with
-the fixed judge, (3) both are reviewed. This gate applies on top of, not instead of, §10's
-sequencing (Qwen core lane complete and reviewed) and Gate 5's existing 👤 hand-validation
+re-scored with `scripts/rescore_judge.py`, (2) FRESH (not re-scored) smokes run on all four core
+conditions — `ours`-Phi, `gptfuzzer`-Phi, `ours`-Qwen, `gptfuzzer`-Qwen — with the fixed judge and
+fixed MCTS reward, (3) all of the above are reviewed. Re-scores are a floor, not a substitute for
+fresh runs: early-stopping on an old false positive means a fresh run may explore further and
+find real jailbreaks the old run never reached. This gate applies on top of, not instead of,
+§10's sequencing (Qwen core lane complete and reviewed) and Gate 5's existing 👤 hand-validation
 requirement (now explicitly noted to apply at every scale, not just the 50-behavior full run).
+
+**Possible reframe, prepared for but not yet decided:** if `ours` (guided mutation) does not beat
+`gptfuzzer` (uniform mutation) on these honest, fresh, post-fix numbers, this judge-reliability
+finding itself becomes a candidate **core contribution** for the paper, not just an incident
+footnote — a demonstrated, reproducible measurement-validity failure in a judge the field
+currently treats as a standard evaluation tool is a real result on its own, independent of
+whether the guided-mutation headline holds up. Do not treat the target-difficulty axis (§10) or
+the guided-vs-uniform ablation as the only possible paper narrative; keep
+`reviews/judge-validity-incident.md` written at paper-evidence quality (it currently is) in case
+it needs to become a section rather than a footnote.

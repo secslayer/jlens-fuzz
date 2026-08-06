@@ -27,6 +27,17 @@ Two-stage judging:
 RoBERTa judge is NOT removed from this codebase — callers may still compute its score as a
 logged DIAGNOSTIC (useful supplementary evidence: "the naive judge overestimates ASR by X" is
 itself a finding worth reporting), but it must never again be the determinant of `success`.
+
+REPORTED 2026-08-06 (pending results/rescore_*.json landing in the repo for independent
+verification -- see reviews/judge-validity-incident.md): re-scoring an existing Phi-4-mini
+`ours` smoke run's raw completions against this fix (scripts/rescore_judge.py) reportedly
+flipped all 4 of its recorded "successes" to failure (old_asr 0.8 -> rescored 0.0), consistent
+with the 0.8 being entirely a judge artifact rather than a real capability gap.
+
+VRAM note: `load_judge_llm()` defaults to 8-bit for the judge (bitsandbytes) -- on a single T4,
+target (fp16) + judge_llm (fp16) + the RoBERTa diagnostic judge OOM'd on a live run. Quantizing
+the JUDGE is scientifically safe (it never touches the target's activations); the target model
+itself must always stay fp16 (PLAN.md §10, non-negotiable).
 """
 import re
 
@@ -87,17 +98,40 @@ def is_refusal(completion):
     return any(p in prefix for p in REFUSAL_PATTERNS)
 
 
-def load_judge_llm(model_id, device):
+def load_judge_llm(model_id, device, load_in_8bit=True):
     """Load the FIXED rubric-judge LLM (configs' judge_llm_model) -- a causal LM, distinct from
-    the RoBERTa classifier load_judge() in each caller script loads for the diagnostic score."""
+    the RoBERTa classifier load_judge() in each caller script loads for the diagnostic score.
+
+    VRAM: on a single T4, target (fp16) + judge_llm (fp16) + the RoBERTa diagnostic judge
+    together OOM (confirmed on a live Phi-4-mini smoke, 2026-08-06). Quantizing the JUDGE to
+    8-bit is the fix, NOT putting it on a second GPU -- run_parallel.sh pins each job to one
+    GPU via CUDA_VISIBLE_DEVICES, so a script explicitly addressing "the other" GPU would
+    silently break under that pinning (each job process only ever sees one GPU, always as
+    device 0 internally) and would halve Kaggle parallel throughput for every run that judges
+    anything, not just this one. Quantizing the judge is scientifically safe here: it never
+    touches the TARGET's activations the probe/direction machinery depends on -- it only has
+    to produce a PASS/FAIL text verdict, a task 8-bit precision handles fine. The target model
+    itself must stay fp16 always (PLAN.md §10: non-negotiable, quantization would corrupt the
+    activation signal) -- this flag only ever applies to the judge.
+    """
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     tok = AutoTokenizer.from_pretrained(model_id)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id, dtype=torch.float16 if device == "cuda" else torch.float32,
-    ).to(device).eval()
+
+    if load_in_8bit and device == "cuda":
+        from transformers import BitsAndBytesConfig
+        # device_map={"": 0} -- "0" is the process-local CUDA index, i.e. whichever single GPU
+        # CUDA_VISIBLE_DEVICES exposed to this process (never a literal second physical GPU).
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id, quantization_config=BitsAndBytesConfig(load_in_8bit=True),
+            device_map={"": 0},
+        ).eval()
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id, dtype=torch.float16 if device == "cuda" else torch.float32,
+        ).to(device).eval()
     return tok, model
 
 

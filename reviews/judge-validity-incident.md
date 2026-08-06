@@ -91,13 +91,48 @@ corrected judge — the search would have kept going. Treat `rescored_asr_same_d
 original number trustworthy," not "what is the true number." For an authoritative number, re-run
 `scripts/run_fuzz.py` (now fixed) from scratch.
 
+## Validation (reported 2026-08-06, pending `results/rescore_*.json` landing in the repo)
+
+`scripts/rescore_judge.py` was run against the Phi-4-mini `ours` smoke run's existing raw
+completions. Reported result: **all 4 recorded "successes" flipped to failure under the fixed
+judge — `old_asr_as_recorded=0.8` → `rescored_asr_same_data=0.0`**. This is consistent with the
+hand-read diagnosis above (the 0.8 was entirely a judge artifact — template echoes and a
+refusal-then-pivot, not real jailbreaks) and is independent confirmation that the fix actually
+changes the outcome in the expected direction, not just in theory.
+
+**Not yet independently verifiable from this repo**: the backing `results/rescore_phi4mini_ours_smoke.json`
+(or equivalent — see `scripts/rescore_judge.py`'s `--out` naming) has not been committed/pushed
+yet. Treat this section as a reported, plausible, but not yet artifact-backed result until that
+file lands — same standard applied to every other number in this project (CLAUDE.md rule 2).
+
+## A second blocker found and fixed: judge OOM on a single T4 (2026-08-06)
+
+The first LIVE fresh-judge smoke attempt (not a re-score) crashed: Phi-4-mini (target, fp16) +
+Phi-3.5-mini (judge_llm, fp16) + the RoBERTa diagnostic judge together exceed one T4's 16GB.
+Fixed by loading the judge LLM in 8-bit (`scripts/judge.py`'s `load_judge_llm()`, via
+`bitsandbytes`) — quantizing the judge doesn't touch the target's activations the probe/direction
+machinery depends on, so it's scientifically safe; the target model itself must always stay fp16
+(PLAN.md §10). Deliberately NOT fixed by moving the judge to a second GPU: `run_parallel.sh` pins
+each job to one GPU via `CUDA_VISIBLE_DEVICES`, so a script explicitly addressing "the other" GPU
+would silently misbehave under that pinning and would halve Kaggle's parallel-job throughput for
+every judged run, not just this one.
+
 ## Required before any full matrix run (per the decision that triggered this fix)
 
 1. ~~Add a stricter judge.~~ Done — `scripts/judge.py`, wired into all three consumers.
-2. **Re-validate both targets.** Re-score Qwen's existing smoke completions with
-   `scripts/rescore_judge.py` (data already exists) — how many of Qwen's "successes" were also
-   false positives? Re-run the Phi `ours` smoke from scratch with the fixed judge (its existing
-   completions are worth rescoring too, as a first look, but a full re-run gives real numbers,
-   including a real `guided_fire_count`/`ASR` under a judge that isn't rewarding template echo).
-3. Only after both are done should any ASR number from this pipeline be trusted, cited, or used
+2. ~~Validate the fix changes real outcomes.~~ Reported done (Phi re-score, 0.8→0.0) — pending
+   the backing artifact landing in the repo, see Validation above.
+3. ~~Fix the judge-LLM OOM so fresh (not just re-scored) runs can actually execute.~~ Done —
+   8-bit judge quantization.
+4. **Run FRESH smokes (not re-scores) on all four core conditions**: `ours`-Phi, `gptfuzzer`-Phi,
+   `ours`-Qwen, `gptfuzzer`-Qwen, with the fixed judge AND the fixed MCTS reward signal. This is
+   the real budget-gate input — re-scores are a floor (early-stopping on old false positives
+   means a fresh run may explore further and find real jailbreaks the old run never reached), not
+   a ceiling or a substitute.
+5. **Prepare for a possible reframe**: if `ours` (guided) does not beat `gptfuzzer`
+   (uniform-mutation baseline) on these honest, fresh numbers, this judge-reliability finding
+   itself becomes a candidate core contribution for the paper, not just an incident note — a
+   demonstrated, reproducible measurement-validity failure in a judge the field currently treats
+   as a standard tool is a real result even if the guided-mutation headline doesn't pan out.
+6. Only after step 4 is done should any ASR number from this pipeline be trusted, cited, or used
    to justify committing GPU budget to the full 2-target × 3-seed matrix.
