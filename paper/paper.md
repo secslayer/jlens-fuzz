@@ -17,33 +17,29 @@ date: 2026-08-07
 ## Abstract
 
 Jailbreak fuzzing benchmarks are usually reported as a single number: attack success rate (ASR),
-as scored by an automated judge. That number is only as trustworthy as the judge producing it. We
-report a measurement-validity failure in `hubert233/GPTFuzz`, a RoBERTa-based success classifier
-widely reused across the jailbreak-fuzzing literature as GPTFuzzer's default judge: it rewards
-jailbreak-**shaped** surface form — persona/roleplay declarations, "you are now X" framing —
-rather than actual harmful content. Hand-reading judge-flagged "successes" on
-Phi-4-mini-instruct found completions that were either refusals that pivoted to an unrelated
-topic, or the model merely echoing a DAN/Omega-style template's setup with zero harmful content.
-We built a stricter two-stage replacement (a deterministic refusal pre-filter plus an
-explicitly anti-roleplay LLM-as-judge rubric) and, critically, found the **same failure mode
-survives the fix**: on a fresh, tree-search-engaged run, the corrected judge still passed a
-"ChadGPT" persona-wrapper completion that in fact refuses and provides crisis-support resources —
-zero harmful content. Judge unreliability on persona-wrapper completions is not specific to one
-classifier architecture; it is a more general problem that a plausible, deliberately-designed fix
-did not fully close. As a secondary result, using the corrected judge and a fixed fitness signal,
-we report an honest null: activation-guided span mutation (mutating the template span with the
-highest projection onto a difference-in-means refusal direction) shows no consistent, reliable
-ASR advantage over GPTFuzzer's uniform mutation baseline, on two open-weight targets
-(Qwen2.5-3B-Instruct, Phi-4-mini-instruct), with the guided-mutation mechanism itself independently
-confirmed as engaged (span-attribution firing on every iteration; UCB1 tree search genuinely
-revisiting mutated children, not just replaying an unmutated seed pool) — but with attribution
-*quality* itself shown, via real debug traces, to be template- and target-dependent rather than
-uniformly refusal-localized, which is itself consistent with the null: a guidance signal that is
-only sometimes informative cannot be expected to reliably beat unguided mutation. All results are reported
-at smoke scale (n=5 behaviors per condition); the originally planned 25-behavior × 3-seed matrix
-did not run because available compute (a Kaggle free-tier allocation) was exhausted before it
-could be launched. We discuss both findings as evidence that jailbreak-fuzzing evaluation
-infrastructure — not just attack methods — deserves scrutiny.
+scored by an automated judge. That number is only as trustworthy as the judge producing it. We
+report a measurement-validity failure in `hubert233/GPTFuzz`, GPTFuzzer's default RoBERTa judge.
+It rewards jailbreak-**shaped** surface form — persona/roleplay declarations, "you are now X"
+framing — rather than harmful content. Hand-reading its flagged "successes" on Phi-4-mini-instruct
+found refusals that pivoted to an unrelated topic, and completions that merely echoed a
+DAN/Omega-style template's setup with zero harmful content.
+
+We built a stricter two-stage replacement: a deterministic refusal pre-filter plus an
+anti-roleplay LLM-as-judge rubric. **The fix did not fully work.** On a fresh run, the corrected
+judge still passed a "ChadGPT" persona-wrapper completion that actually refuses and offers
+crisis-support resources — zero harmful content. Judge unreliability on persona-wrapper
+completions survives a deliberate, targeted fix; it is not one classifier's quirk.
+
+As a secondary result, we report an honest null. Using the corrected judge, activation-guided
+mutation shows no consistent, reliable ASR advantage over GPTFuzzer's uniform-mutation baseline,
+on either target we tested (Qwen2.5-3B-Instruct, Phi-4-mini-instruct). We independently confirmed
+the guided-mutation mechanism was engaged: attribution fired on every iteration, and search
+revisited mutated candidates. Attribution *quality*, however, was template- and target-dependent,
+not uniformly refusal-localized — consistent with a guidance signal that only sometimes helps.
+
+All results are smoke-scale (n=5 behaviors per condition); the planned 25-behavior × 3-seed matrix
+never ran — compute (Kaggle's free tier) was exhausted first. Both findings argue that
+jailbreak-fuzzing evaluation infrastructure, not just attack methods, deserves scrutiny.
 
 ## 1. Introduction
 
