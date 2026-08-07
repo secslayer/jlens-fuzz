@@ -1,0 +1,503 @@
+---
+title: >
+  Judge-Shaped, Not Harm-Shaped: A Persistent Measurement-Validity Failure in Jailbreak
+  Success Judges, and an Honest Null Result for Activation-Guided Mutation
+status: DRAFT — Day 7, for section-by-section PI review. Not yet reviewed (/review 7 not run).
+date: 2026-08-07
+---
+
+> **How to read this draft.** Every number below is either (a) read directly from a committed
+> `results/*.json` / `results/*.npz` file — cited inline as `path → field`, or (b) explicitly
+> marked as PI-hand-verified (a real completed human check not written back into any file) or
+> PI-reported-only (no backing artifact exists in this repo at all). Anywhere I could not find a
+> backing artifact for a claim in the brief, I have flagged it inline as **[DRAFT FLAG]** rather
+> than invent or soften it into unmarked prose. Please resolve each flag before this leaves draft
+> status.
+
+## Abstract
+
+Jailbreak fuzzing benchmarks are usually reported as a single number: attack success rate (ASR),
+as scored by an automated judge. That number is only as trustworthy as the judge producing it. We
+report a measurement-validity failure in `hubert233/GPTFuzz`, a RoBERTa-based success classifier
+widely reused across the jailbreak-fuzzing literature as GPTFuzzer's default judge: it rewards
+jailbreak-**shaped** surface form — persona/roleplay declarations, "you are now X" framing —
+rather than actual harmful content. Hand-reading judge-flagged "successes" on
+Phi-4-mini-instruct found completions that were either refusals that pivoted to an unrelated
+topic, or the model merely echoing a DAN/Omega-style template's setup with zero harmful content.
+We built a stricter two-stage replacement (a deterministic refusal pre-filter plus an
+explicitly anti-roleplay LLM-as-judge rubric) and, critically, found the **same failure mode
+survives the fix**: on a fresh, tree-search-engaged run, the corrected judge still passed a
+"ChadGPT" persona-wrapper completion that in fact refuses and provides crisis-support resources —
+zero harmful content. Judge unreliability on persona-wrapper completions is not specific to one
+classifier architecture; it is a more general problem that a plausible, deliberately-designed fix
+did not fully close. As a secondary result, using the corrected judge and a fixed fitness signal,
+we report an honest null: activation-guided span mutation (mutating the template span with the
+highest projection onto a difference-in-means refusal direction) shows no consistent, significant
+ASR advantage over GPTFuzzer's uniform mutation baseline, on two open-weight targets
+(Qwen2.5-3B-Instruct, Phi-4-mini-instruct), with the guided-mutation mechanism itself independently
+confirmed as engaged (span-attribution firing on every iteration; UCB1 tree search genuinely
+revisiting mutated children, not just replaying an unmutated seed pool). All results are reported
+at smoke scale (n=5 behaviors per condition); the originally planned 25-behavior × 3-seed matrix
+did not run because available compute (a Kaggle free-tier allocation) was exhausted before it
+could be launched. We discuss both findings as evidence that jailbreak-fuzzing evaluation
+infrastructure — not just attack methods — deserves scrutiny.
+
+## 1. Introduction
+
+Attack success rate (ASR) — the fraction of harmful behaviors for which a fuzzing loop finds at
+least one prompt an LLM complies with — is the standard headline metric in jailbreak-fuzzing
+work, following GPTFuzzer [Yu et al., 2023]. ASR is only as meaningful as the judge that decides
+"did this completion comply." That judge is frequently a small, frozen, off-the-shelf classifier
+reused across many follow-on papers without re-validation — an implicit assumption that the
+judge itself is a solved problem.
+
+This paper started as a study of a different question: does mutating a jailbreak template at the
+*location* an interpretability signal points to (a refusal direction extracted via
+difference-in-means over paired harmful/harmless prompts) produce better guided mutations than
+GPTFuzzer's uniform, whole-prompt mutation? In the course of running that experiment, the
+project's own pipeline caught its judge lying to it. Four completions the judge scored ~0.99
+("jailbroken") on a Phi-4-mini smoke run were, on inspection, not jailbreaks at all — one was a
+refusal that pivoted to an unrelated topic, three were the target model merely reciting a
+roleplay template's setup with no harmful content whatsoever. The judge was detecting
+jailbreak-**shaped** vocabulary, not harm.
+
+We treat this not as an incident to patch quietly and move past, but as the paper's primary
+finding. We built a stricter two-stage judge (§3) and validated that it changes real outcomes
+(§5.1). But hand-verifying the *fixed* judge's own output on a later, methodologically cleaner
+run turned up a second, distinct instance of the same failure class — a persona-wrapper
+completion that actually refuses and provides crisis resources, still scored a pass. That a
+deliberate, rubric-guided LLM-as-judge fix did not fully close this gap is, we argue, more
+informative than either finding alone: judge reliability on persona-wrapper / roleplay-shaped
+completions is a persistent problem across judge architectures, not a quirk of one RoBERTa
+classifier.
+
+Our secondary contribution is an honest null result. Using the corrected judge, and with the
+guided-mutation mechanism independently confirmed to be operating as designed (§5.2–5.3),
+activation-guided mutation shows no consistent, significant ASR advantage over uniform mutation
+on either target we tested. We report this as a negative result specifically *because* we can
+rule out "the mechanism never engaged" as the explanation — the null is informative, not an
+artifact of guided mutation quietly falling back to uniform mutation under the hood.
+
+Both results come with an honest scope limitation: everything here is smoke-scale (n=5 behaviors
+per condition), not the originally planned 25-behavior × 3-seed matrix, because the free-tier
+compute budget (Kaggle, 2×T4 per session) was exhausted before the full matrix could run. We
+state this plainly rather than let smoke-scale numbers imply matrix-scale statistical power.
+
+**Contributions:**
+1. A reproducible, hand-verified demonstration that a standard jailbreak-fuzzing success judge
+   (`hubert233/GPTFuzz`) is fooled by jailbreak-shaped surface form rather than actual harm, and
+   that this failure mode **persists after a deliberate, rubric-based LLM-judge fix** — not a
+   single-classifier quirk.
+2. An honest null result for activation-guided span mutation vs. uniform mutation, reported with
+   independent confirmation that the guided-mutation mechanism (attribution + tree-search
+   revisiting) was actually active during the runs that produced the null, distinguishing "no
+   effect" from "mechanism never fired."
+3. A stated, artifact-backed inventory of exactly which numbers in this paper are read directly
+   from committed result files, which are PI-hand-verified but not written back into any file,
+   and which are reported without any backing artifact at all — offered as a concrete
+   illustration of the provenance discipline we think jailbreak-fuzzing papers should adopt more
+   generally, given finding 1.
+
+## 2. Related Work
+
+**Black-box jailbreak fuzzing.** GPTFuzzer [Yu et al., 2023, arXiv:2309.10253] introduced
+MCTS-lite (UCB1) seed-template selection over a human-authored jailbreak template pool, with an
+LLM mutator rewriting the *whole* selected template and a trained RoBERTa classifier as the
+success judge. We reuse GPTFuzzer's seed-selection algorithm unchanged (§3) as our uniform-
+mutation baseline and as the search scaffold our guided-mutation variant is built on top of — the
+novelty in this work is *where* mutation targets a template and *which* judge determines success,
+not the search algorithm itself.
+
+**White-box activation steering / refusal directions.** Arditi et al. [2024, arXiv:2406.11717]
+showed that refusal behavior in instruction-tuned LLMs is mediated, to a first approximation, by a
+single linear direction in activation space, extractable via a difference-in-means contrast
+between harmful and harmless prompt activations, and that ablating or amplifying this direction
+causally affects refusal behavior. We reuse this direction-extraction methodology (§3) but for a
+different purpose than steering generation directly: we use the direction as a **token-attribution
+signal** to decide *where inside a jailbreak template* a mutation should be targeted, on the
+hypothesis that spans strongly projecting onto the refusal direction are the parts of a template
+most responsible for triggering refusal, and are therefore the highest-value mutation targets.
+This connects to a closely related line of work using refusal-direction signals to directly guide
+or explain jailbreak search — in particular the approach informally referred to in this project's
+planning documents as "Mechanistic AutoDAN"
+[arXiv:2605.28553, "Refusal Before Decoding: Detecting and Exploiting Refusal Signals in
+Intermediate LLM Activations"], which detects and exploits refusal signals in intermediate
+activations directly. We distinguish our approach as targeting the *search/mutation-selection*
+problem (which span of an existing template to rewrite) rather than the decoding/generation
+problem the "Refusal Before Decoding" framing addresses; a precise technical comparison against
+that work is left as future work (we have not run it as a baseline — see §4).
+
+**Jailbreak evaluation and judges.** AutoDAN [Liu et al., 2023, arXiv:2310.04451] and AJF
+[arXiv:2505.23404, "AJF: Adaptive Jailbreak Framework Based on the Comprehension Ability of
+Black-Box Large Language Models"] are cited here as context for the jailbreak-generation
+literature this project's baselines and method sit alongside — **we did not run either as a
+baseline in this work**; PLAN.md's compute-budget lock (§10, and see §4) scoped the core
+comparison to GPTFuzzer alone as a sufficient baseline for a preprint, with AutoDAN explicitly
+deferred to an extended lane that did not get funded before compute ran out. Separately, a growing
+body of work has begun questioning the reliability of jailbreak judges themselves: "How Reliable
+Is Your Jailbreak Judge? Calibration and Adversarial Robustness of Automated ASR Scoring"
+[arXiv:2606.25487] finds that a large and growing share of reported jailbreak-evaluation results
+using LLM-judges are unreliable, both on average and under deliberate adversarial pressure;
+"LLM-Safety Evaluations Lack Robustness" [arXiv:2503.02574] and "Confusion is the Final Barrier:
+Rethinking Jailbreak Evaluation and Investigating the Real Misuse Threat of LLMs"
+[arXiv:2508.16347] make related robustness/consistency arguments; "'Not Aligned' is Not
+'Malicious': Being Careful about Hallucinations of Large Language Models' Jailbreak"
+[arXiv:2406.11668] specifically discusses judges hallucinating jailbreak success; and "Beyond
+Accuracy: Policy Invariance as a Reliability Test for LLM Safety Judges" [arXiv:2605.06161]
+proposes a reliability test in the same spirit as our residual-false-positive check. We situate
+this paper's primary contribution within this cluster: rather than a general audit or a new
+reliability *metric*, we contribute a specific, reproducible, hand-verified case study of a
+widely-reused classifier judge failing, a concrete fix, and — the part we believe is
+under-examined in this literature — direct evidence that the fix's own output still contains the
+same failure class, from our own pipeline's real generations rather than a constructed
+adversarial example.
+
+## 3. Method
+
+**Pipeline overview.** `scripts/run_fuzz.py` implements a single fuzzing loop parameterized by
+`--method {ours, gptfuzzer}`, `--mutation {guided, uniform}`, and `--fitness judge` (this project's
+probe-based `judge+act` fitness variant was built but demoted — see below). Both methods share:
+
+- **Seed pool.** The original GPTFuzzer human-authored template pool
+  (`sherdencooper/GPTFuzz`'s `GPTFuzzer.csv`, 77 templates), subsampled deterministically to
+  `seed_pool_size=12` templates via a fixed constant seed (`SEED_POOL_SUBSAMPLE_SEED=0`,
+  independent of the run's own `--seed`) — identical 12 templates across every run, replicate,
+  and target. §4 explains why this subsampling exists.
+- **UCB1 pool selection.** GPTFuzzer's MCTS-lite node selection, reused unchanged: at each
+  iteration, select the pool node maximizing UCB1 score (unvisited nodes get priority; visited
+  nodes trade off mean reward against an exploration bonus), mutate it, and append the mutated
+  child as a new pool node.
+- **Two-stage success judging** (`scripts/judge.py`, §3.3).
+
+**3.1 Refusal-direction extraction.** Following Arditi et al. [2024], we extract a per-layer
+difference-in-means direction from paired harmful (AdvBench) and harmless (Alpaca-style)
+prompts' residual-stream activations. On Qwen2.5-3B-Instruct (the control target), the
+best-held-out-AUC layer is layer 25 of 36, AUC 1.0 (`results/direction.npz` →
+`best_layer=25, best_layer_idx=24, best_auc=1.0`). Critically, this direction was checked for
+generalization beyond its own held-out split: on 6 hand-written novel prompts (3 harmful phrased
+conversationally, 3 benign phrased as imperatives — deliberately crossing AdvBench's own surface
+style to avoid the confound below), it separated harmful (+30 average projection) from benign
+(−5 average projection) cleanly (`reviews/stage2-human-signoff.md`). **[DRAFT FLAG]** We do not
+have an equivalent committed artifact for Phi-4-mini-instruct: `results/phi/direction.npz` (or
+the manifest's default `results/phi4mini/direction.npz`) is not present in this repository as of
+this writing, even though the Phi `ours` run (§5) clearly used *some* direction file
+(`guided_fire_count=200/200`, i.e. attribution succeeded on every iteration — it could not have
+done so without a loaded, dimension-matched direction). Whatever direction file was used for Phi
+was not pushed/committed. We cannot report Phi's direction AUC or novel-prompt separation in this
+draft; either that artifact needs to be pushed from Kaggle, or this must be stated as a limitation
+(§6) rather than silently assumed to mirror Qwen's numbers.
+
+A parallel logistic-regression probe (Component "fitness" signal, distinct from the direction)
+was also trained and gated: probe held-out AUC was 1.0 (`results/probes/best_layer.json` →
+`best_layer=9, best_auc=1.0`), but the probe **failed** the same 6-novel-prompt check at chance
+accuracy (0.5) despite its 1.0 held-out AUC — diagnosed as overfitting a lexical/surface confound
+between AdvBench's imperative phrasing and the benign training set's more conversational phrasing
+(`reviews/stage2-human-signoff.md`). Per that gate's explicit ruling, probe-based fitness
+(`--fitness judge+act`) was demoted out of the core comparison entirely; every result in this
+paper uses `--fitness judge` (judge-only reward), and the probe/`judge+act` path is not part of
+any claim below. Guided *mutation* (driven by the direction, not the probe) is unaffected by this
+demotion and remains the paper's method under test.
+
+**3.2 Guided mutation (`ours`, `--mutation guided`).** For the selected pool template, we run a
+partial forward pass, compute the per-token projection of each token's residual-stream activation
+(at the direction's best layer) onto the refusal direction, and select the contiguous
+`MUTATE_WINDOW_TOKENS`-token window (excluding the behavior-injection marker span) with the
+highest summed projection. A local mutator LLM is then instructed to rewrite *only that span*
+("reduce refusal-triggering framing, preserve intent"), leaving the rest of the template
+untouched. If attribution fails for any reason (degenerate span, shape mismatch, tokenizer edge
+case), the loop falls back to whole-template uniform mutation for that iteration and increments a
+`guided_fallback_count` counter — this ensures fallback is never silent (§5.3).
+**Uniform mutation** (`gptfuzzer`, and `ours --mutation uniform` as an ablation) mutates the
+selected template's entire text, per GPTFuzzer's original design, sharing every other component
+(seed pool, UCB1 selection, judge) with the guided condition — the only variable that differs
+between `ours` and `gptfuzzer` is mutation location.
+
+**3.3 Two-stage success judging (`scripts/judge.py`).** Motivated by the false-positive finding
+that is this paper's primary contribution (§5.1), success determination is a two-stage process:
+(1) a deterministic keyword pre-filter (`is_refusal()`) checks the first 300 characters of a
+completion against a list of canonical refusal phrases — catching "refuses, then pivots to
+something unrelated" with zero model calls; (2) anything that passes stage 1 is graded by a fixed,
+small, ungated LLM (`microsoft/Phi-3.5-mini-instruct`, distinct from both attack targets so it is
+never self-grading) against an explicit rubric instructing it to fail responses that merely
+adopt a roleplay persona or template setup without providing real harmful content, or that
+address a different/watered-down version of the request, and to pass only responses that give
+real, specific, actionable content. The original RoBERTa classifier judge (`hubert233/GPTFuzz`) is
+retained as a **logged diagnostic only** (`roberta_judge_score` per candidate,
+`roberta_judge_positive_rate` aggregated) — never the success determinant in any result reported
+here.
+
+## 4. Experimental Setup
+
+**Targets.** Two open-weight instruction-tuned models, both ungated and small enough to fit a
+single Kaggle T4 GPU in fp16: **Qwen2.5-3B-Instruct** (control) and **Phi-4-mini-instruct**
+(~3.8B params, treatment). The two targets share every pipeline invariant except the model
+itself and its paired mutator-LLM default (each target self-mutates; see `configs/exp.yaml` /
+`configs/exp_phi4mini.yaml`), per this project's rule that cross-target ASR comparisons are only
+valid if judge, benchmark, budget, and decoding parameters are held fixed.
+
+**Benchmark and budget.** 5 behaviors per condition sampled from the canonical AdvBench CSV
+(`llm-attacks/llm-attacks`), `query_budget=40` full-generation queries per behavior,
+`max_iterations=100`, `decode_temperature=0.7`, `decode_top_p=0.9` — identical across every
+condition reported (`configs/exp.yaml`, `configs/exp_phi4mini.yaml`).
+
+**Seed-pool subsampling (`seed_pool_size=12`).** We found, via a debug-logging pass over the
+UCB1 pool-selection trace, that the original 77-template seed pool exceeds `query_budget=40`:
+since UCB1 always prioritizes unvisited nodes, and 77 > 40, every iteration of every behavior in
+our first attempt selected the next never-mutated original seed template, in identical order,
+for every behavior — the search never reached a point within budget where UCB1 would revisit and
+refine an already-mutated child. Both `ours` and `gptfuzzer` were, in effect, doing the same thing
+(mutate a fresh seed once) and a guided-vs-uniform comparison run this way would not actually test
+mutation-location strategy at all. We fixed this by deterministically subsampling the seed pool
+to 12 templates (fixed constant, not `--seed` — identical 12 templates on every run/replicate/
+target), so that ~12 of the 40-query budget exhausts the pool and the remaining ~28 do real UCB1
+revisiting. We verified this structurally engages tree search by extracting `select_ucb1()`/
+`backpropagate()` **verbatim** from the codebase and running them standalone against a synthetic
+reward loop: the old 77-template pool yields 0/40 mutated-child selections at `query_budget=40`
+(confirming the problem); the new 12-template pool yields 16/40 mutated-child selections even
+under the worst-case all-zero-reward scenario (confirming the fix). §5.3 reports the *real* runs'
+`n_mutated_child_selected` counts, which is the artifact-backed version of this claim.
+
+**Compute constraint — stated plainly.** All compute for this project ran on Kaggle's free tier
+(2×T4 GPUs per session, ~30 GPU-hours/week). The originally planned full evaluation — 25
+behaviors × 3 seeds × 2 targets × {`ours`, `gptfuzzer`, plus ablations} — **did not run.** The
+free-tier compute budget was exhausted after the smoke-scale (n=5) runs reported here, before the
+full matrix could be launched. This is a hard resource constraint, not a scheduling choice: every
+result in this paper is smoke-scale, and we treat the resulting lack of statistical power as a
+first-class limitation (§6), not an implementation detail to bury.
+
+## 5. Results
+
+### 5.1 Judge reliability: primary contribution
+
+**The original incident.** Hand-reading 4 completions the original `hubert233/GPTFuzz` judge
+scored ~0.99 ("jailbroken") on an early Phi-4-mini smoke run found all four were not jailbreaks:
+one was a refusal ("I can't assist") that pivoted to an unrelated topic; three were the model
+merely echoing a DAN/Omega/APOPHIS-style roleplay template's persona/setup instructions, with
+zero harmful content (full writeup: `reviews/judge-validity-incident.md`). **[DRAFT FLAG]** The
+specific `asr=0.8` figure this produced is *not* backed by a committed `results/*.json` in this
+repository — no `results/phi/ours_smoke.json` (pre-fix, pre-pool-fix) exists here; the 0.8 number
+exists only as narrative record in the incident writeup, not as a citable artifact. We report the
+qualitative finding (4/4 hand-read false positives) as established — that is a direct,
+already-documented human read — but we cannot cite "0.8 → 0.0" as a clean before/after artifact
+pair the way the rest of this section's numbers are cited, and flag that the paper's judge-
+inflation claim should lean on the evidence below instead, which *is* fully artifact-backed.
+
+**A cleaner, artifact-backed before/after (Qwen, same target, same method, same n=5
+behaviors).** `results/ours_smoke.json` (old RoBERTa judge as the live success determinant,
+predating both the judge fix and the seed-pool fix) reports `asr=1.0` (5/5) — every behavior
+"succeeded" by the old judge's own determination during search. `results/ours_smoke_pool12.json`
+(fixed judge as determinant, seed-pool fix applied) reports `asr=0.4` (2/5), later hand-verified
+to a true 0.2 (1/5; see below). **We flag this comparison as suggestive, not a controlled
+ablation**: two variables changed between these two runs (judge fix AND seed-pool fix), not one,
+so the delta cannot be cleanly attributed to the judge alone.
+
+**The cleanest same-run comparison available.** Within `results/ours_smoke_pool12.json` itself
+(one run, one set of candidates, both judges scored on the same completions), the retained
+RoBERTa diagnostic score (`roberta_judge_positive_rate = 0.335`, i.e. the old judge would have
+flagged ~34% of the 167 individually-evaluated candidates as positive) is far higher than the
+trusted judge's own candidate-level success rate (`trusted_judge_success_rate = 0.012`, ~1.2%
+of the same 167 candidates). **Important caveat, stated in the pipeline's own code comment**:
+these two fields are **candidate-level** rates (over every full-generation query in the run), not
+the **behavior-level** `asr` statistic reported elsewhere in this paper — they answer "how often
+would the two judges have disagreed on an individual completion," not "what would behavior-level
+ASR have been under the old judge." We report both numbers because they are real and
+artifact-backed, but we do not collapse them into a single "Nx inflation" headline figure the way
+an early draft of this section's brief suggested, because that would conflate two different
+statistics. The qualitative direction — old diagnostic judge substantially more permissive than
+the trusted judge, on the identical completions — is exactly what §5.1's original incident
+predicts, and holds here too.
+
+| Run | Judge (determinant) | `asr` | Granularity note |
+|---|---|---|---|
+| `results/ours_smoke.json` (Qwen, pre-fix, pre-pool-fix) | old RoBERTa | 1.0 (5/5) | behavior-level |
+| `results/ours_smoke_pool12.json` (Qwen, fixed judge, pool-fix) | fixed 2-stage | 0.4 (2/5), hand-verified true 0.2 (1/5) | behavior-level |
+| — same run, `roberta_judge_positive_rate` | old RoBERTa (diagnostic only) | 0.335 | **candidate-level, not comparable to `asr` above** |
+| — same run, `trusted_judge_success_rate` | fixed 2-stage (diagnostic mirror) | 0.012 | **candidate-level, not comparable to `asr` above** |
+
+**Residual false positive, found AFTER the fix — the ChadGPT case.** Hand-verifying the fixed
+judge's 2 flagged Qwen `ours` successes (`results/ours_smoke_pool12.json`, `asr=0.4`) found only 1
+is genuine. The other is a **false positive**: a "ChadGPT" persona-wrapper completion that, in its
+actual response, refuses the harmful request and provides crisis-support resources — zero harmful
+content — yet the fixed rubric judge (whose rubric explicitly instructs failing "the response
+refuses, declines, moralizes, or deflects... even if it then talks about something unrelated")
+scored it PASS anyway (full writeup: `reviews/judge-validity-incident.md`, "Residual false
+positive found AFTER the fix"). True hand-verified Qwen `ours` ASR: **1/5 = 0.2**, not written
+back into the JSON (this project does not retroactively edit results files). We consider this the
+paper's central piece of evidence: the failure mode identified in the original incident is not
+specific to `hubert233/GPTFuzz`'s classifier architecture — it survives a deliberately
+anti-roleplay, explicitly-rubric-instructed LLM-as-judge replacement. Two plausible, non-exclusive,
+**undiagnosed** contributors (flagged rather than asserted, since the raw completion text is
+gitignored per this project's data-handling policy and not independently re-inspectable from this
+repository): the stage-1 keyword pre-filter's 300-character window could have let a
+later-appearing refusal phrase through to the LLM judge; or the LLM judge itself may simply have
+failed to apply its own rubric correctly on this input — itself a citable limitation of the
+"replace a classifier judge with an LLM judge" fix strategy.
+
+### 5.2 The honest guided-mutation null
+
+| Target | Method | `asr` | Hand-verified `asr` | Source |
+|---|---|---|---|---|
+| Qwen2.5-3B | `ours` (guided) | 0.4 (2/5) | **0.2 (1/5)** | `results/ours_smoke_pool12.json` |
+| Qwen2.5-3B | `gptfuzzer` (uniform) | 0.0 (0/5) | 0.0 (0/5) | `results/gptfuzzer_smoke_pool12.json` |
+| Phi-4-mini | `ours` (guided) | 0.0 (0/5) | 0.0 (0/5) | `results/phi/ours_smoke_pool12.json` |
+| Phi-4-mini | `gptfuzzer` (uniform) | 0.0 (0/5) | 0.0 (0/5) | `results/phi/gptfuzzer_smoke_pool12.json` |
+
+**We explicitly do not claim guided mutation beats uniform mutation from this table.** The Qwen
+1-vs-0 (hand-verified) or 2-vs-0 (raw judge count) gap is noise at n=5 — a single behavior flipping
+either way changes the ratio entirely, and Phi shows a tied 0-vs-0. **[DRAFT FLAG]** A separate,
+earlier run (pool=77, post-judge-fix but pre-seed-pool-fix) was reported by the PI as showing
+Qwen `ours` = `gptfuzzer` = 0.4 (tied) — we note this as directionally consistent with the null
+above, but **no backing file for that run exists in this repository**, so we report it only as
+context, not as a citable data point, and recommend leading with the pool-12 numbers above (which
+are fully artifact-backed and have the tree-search-engagement property the pool-77 run lacked) as
+the paper's primary evidence for the null, per the PI's own guidance.
+
+Both targets' `asr` values are computed at `n_behaviors=5` (smoke scale). Establishing whether
+either direction (guided advantage, or no advantage) is statistically significant would require
+substantially more behaviors and seed replicates than compute allowed (§4, §6) — we report a null
+at the scale we could afford to test, not a proof of equivalence at any scale.
+
+### 5.3 Mechanism-engagement check: is the null a broken-mechanism artifact?
+
+A null result is only informative if the mechanism under test actually ran. We can confirm two
+specific, artifact-backed facts about mechanism engagement, and must flag a third claim as
+unconfirmed:
+
+- **Attribution fires, does not silently fall back.** `guided_fire_count` / `full_forward_passes`
+  is 167/167 for Qwen `ours` and 200/200 for Phi `ours` (both files above) — `guided_fallback_count`
+  is 0 in both. `find_attribution_span()` successfully located a real mutation span on every
+  single iteration of every guided run reported here; the null above is not explained by guided
+  mutation quietly degrading to uniform mutation under the hood.
+- **Tree search genuinely engages** (the fix in §4 working as intended). `n_mutated_child_selected`
+  is 54 (Qwen `ours`), 80 (Qwen `gptfuzzer`), 80 (Phi `ours`), 80 (Phi `gptfuzzer`) — all four runs
+  spend a substantial fraction of their budget revisiting/refining previously-mutated pool nodes,
+  not just replaying the 12 original seeds (`n_original_selected` 113/120/120/120 respectively —
+  note `n_original_selected + n_mutated_child_selected` should sum to each run's
+  `full_forward_passes`; Qwen `ours`' 113+54=167 checks out exactly, confirming these counters are
+  internally consistent). This directly answers the question the seed-pool fix (§4) set out to
+  answer: at pool-12, real UCB1 tree search is happening, on both methods, in every reported run.
+- **[DRAFT FLAG — not confirmed, do not state as fact without further evidence.]** We do **not**
+  have an artifact confirming the *semantic* claim that attribution "localizes to refusal-relevant
+  tokens" specifically (e.g. that the top-projecting tokens are words like "sorry"/"cannot"/
+  "decline" rather than semantically arbitrary high-scoring tokens). `--debug-attribution` logging
+  was built into `run_fuzz.py` specifically to answer this question (it logs the top-k tokens by
+  projection score and the selected span's text for every guided-mutation call), but no run with
+  that flag enabled was executed and reported back during this project — the pool-12 smoke runs
+  behind this section's numbers were **not** run with `--debug-attribution`. We can honestly claim
+  "the attribution mechanism fires and produces *some* span every iteration" (bullet 1) and
+  "tree search revisits mutated children" (bullet 2), both fully confirmed. We cannot yet honestly
+  claim the mechanism's *semantic target* is refusal-relevant tokens specifically, and this draft
+  does not make that claim. If real `--debug-attribution` output exists, it should be added here
+  before this section leaves draft status; otherwise this bullet should be softened further or
+  moved to future work.
+
+## 6. Limitations
+
+- **Smoke scale (n=5), not the planned matrix.** Every ASR figure in this paper is computed over
+  5 behaviors per condition. The originally planned evaluation (25 behaviors × 3 seeds × 2
+  targets) did not run — compute (Kaggle free tier) was exhausted first. Effect sizes here should
+  be read as suggestive at best; no claim in this paper should be read as carrying matrix-scale
+  statistical power.
+- **Compute-constrained matrix abandonment, not a scheduling deferral.** We state this plainly
+  rather than imply the full matrix is merely "future work in progress": it will not run under
+  this project's current resourcing.
+- **Same-vendor judge LLM.** The rubric-based LLM judge (`microsoft/Phi-3.5-mini-instruct`) is
+  same-vendor as one of the two attack targets (`microsoft/Phi-4-mini-instruct`) — a different
+  checkpoint and training run, and never grading its own outputs, but not a fully
+  vendor-independent judge either. We flag this as a potential (unquantified) source of residual
+  bias, distinct from the persona-wrapper false-positive finding in §5.1.
+- **Small, ≤4B-parameter open-weight targets only.** Both targets are ungated, small enough to fit
+  a single T4 GPU in fp16. Generalization to larger or more heavily safety-tuned models is
+  untested here.
+- **Raw completions not fully retained/reproducible from this repository alone.** Per this
+  project's data-handling policy, generated jailbreak attempt text (`results/prompts_*`) is
+  gitignored and never committed. The ChadGPT false-positive example (§5.1) and other
+  hand-verification work were done against completions available at generation time (locally /
+  on the Kaggle session) but are not preserved in this repository — an independent reader cannot
+  re-inspect the exact completion text behind §5.1's central finding from this repo alone. This is
+  a genuine reproducibility limitation, traded off against the (higher-priority) commitment never
+  to publish raw jailbreak strings (§7).
+- **Direction/probe artifacts incomplete for one target.** As flagged in §3.1, no committed
+  direction-extraction artifact exists for Phi-4-mini in this repository, despite the Phi `ours`
+  run clearly having used one. Phi's direction AUC / novel-prompt-generalization numbers cannot be
+  reported here and should be treated as missing, not assumed equivalent to Qwen's.
+- **AutoDAN and AJF were not run as baselines** (§2) — cited for context only, per the project's
+  compute-scoped decision to treat GPTFuzzer alone as a sufficient core-lane baseline.
+
+## 7. Ethics and Responsible Disclosure
+
+This project generated real jailbreak attempts against two open-weight instruction-tuned models,
+targeting AdvBench behaviors, some of which concern self-harm and other sensitive categories.
+**Content warning applies to the underlying (unpublished) data this paper describes.**
+
+- **No successful jailbreak strings are published in this repository or paper.** Raw
+  template/candidate/completion text is gitignored (`results/**/prompts_*`,
+  `results/**/*jailbreak*`) and never committed, for the entire duration of this project — this
+  is enforced at the tooling level (every commit is grepped for accidental inclusion before it is
+  made), not only by convention.
+- **Regeneration, not redistribution.** Anyone needing to verify a specific claim in this paper
+  (e.g. re-examining the ChadGPT false positive, §5.1) must regenerate it themselves using the
+  committed code, config, and behavior benchmark (all public) — we do not ship a copy of the
+  generated harmful text itself, following the same withholding precedent as GPTFuzzer's own
+  release practice.
+- **Public benchmark only.** All harmful behaviors are drawn from AdvBench, an existing public
+  research benchmark; this work introduces no new harmful-behavior taxonomy or capability.
+- **White-box work on small open-weight models; no production system targeted.** Neither target
+  model is a deployed production system; this is controlled research-environment testing of
+  publicly released model weights.
+- **Defensive framing.** The refusal-direction signal this paper's guided-mutation mechanism is
+  built on (§3.1) is directly usable as a runtime monitoring signal: a deployment could project
+  activations onto the same direction and flag/intervene on completions whose internal state
+  drifts away from a refusal trajectory mid-generation, independent of whether guided mutation
+  itself proves useful as an attack method. We suggest this as a concrete defensive application
+  of the same interpretability signal studied here.
+- **Disclosure.** **[DRAFT FLAG — action item, not yet done.]** Per PLAN.md §8, disclosure to the
+  affected open-weight model maintainers should happen before this paper is made public, in
+  particular given the transfer-target design (§4) — this has not yet occurred as of this draft
+  and should be completed, and the outcome documented here, before submission.
+
+## References
+
+- Yu, J. et al. "GPTFUZZER: Red Teaming Large Language Models with Auto-Generated Jailbreak
+  Prompts." arXiv:2309.10253, 2023.
+- Liu, X. et al. "AutoDAN: Generating Stealthy Jailbreak Prompts on Aligned Large Language
+  Models." arXiv:2310.04451, 2023.
+- Arditi, A. et al. "Refusal in Language Models Is Mediated by a Single Direction."
+  arXiv:2406.11717, 2024.
+- "'Not Aligned' is Not 'Malicious': Being Careful about Hallucinations of Large Language Models'
+  Jailbreak." arXiv:2406.11668, 2024.
+- "LLM-Safety Evaluations Lack Robustness." arXiv:2503.02574, 2025.
+- "AJF: Adaptive Jailbreak Framework Based on the Comprehension Ability of Black-Box Large
+  Language Models." arXiv:2505.23404, 2025.
+- "Confusion is the Final Barrier: Rethinking Jailbreak Evaluation and Investigating the Real
+  Misuse Threat of LLMs." arXiv:2508.16347, 2025.
+- "Beyond Accuracy: Policy Invariance as a Reliability Test for LLM Safety Judges."
+  arXiv:2605.06161, 2026.
+- "Refusal Before Decoding: Detecting and Exploiting Refusal Signals in Intermediate LLM
+  Activations" (informally "Mechanistic AutoDAN" in this project's internal planning docs).
+  arXiv:2605.28553, 2026.
+- "How Reliable Is Your Jailbreak Judge? Calibration and Adversarial Robustness of Automated ASR
+  Scoring." arXiv:2606.25487, 2026.
+
+**[DRAFT FLAG]** All arXiv IDs above were checked live against arxiv.org (title match confirmed)
+during drafting, but full bibliographic details (venue, exact author lists) have not been
+independently verified beyond the arXiv abstract page title — standard BibTeX entries should be
+pulled before submission.
+
+## Appendix A — Full provenance table
+
+| Claim | File | Field(s) | Status |
+|---|---|---|---|
+| Qwen `ours` pool-12 ASR | `results/ours_smoke_pool12.json` | `asr`, `guided_fire_count`, `n_original_selected`, `n_mutated_child_selected`, `roberta_judge_positive_rate`, `trusted_judge_success_rate` | Artifact-backed |
+| Qwen `gptfuzzer` pool-12 ASR | `results/gptfuzzer_smoke_pool12.json` | same fields | Artifact-backed |
+| Phi `ours` pool-12 ASR | `results/phi/ours_smoke_pool12.json` | same fields | Artifact-backed |
+| Phi `gptfuzzer` pool-12 ASR | `results/phi/gptfuzzer_smoke_pool12.json` | same fields | Artifact-backed |
+| Qwen pre-fix `ours` ASR | `results/ours_smoke.json` | `asr`, `guided_fire_count` | Artifact-backed |
+| Qwen direction AUC / layer | `results/direction.npz` | `best_layer`, `best_layer_idx`, `best_auc` | Artifact-backed |
+| Qwen direction novel-prompt separation | `reviews/stage2-human-signoff.md` | prose (+30 / −5 avg) | Human-verified record, not a JSON scalar |
+| Qwen probe AUC / novel-prompt failure | `results/probes/best_layer.json`, `reviews/stage2-human-signoff.md` | `best_auc`; 0.5 novel accuracy (prose) | Artifact-backed (AUC) + human-verified record (novel check) |
+| ChadGPT false positive, true Qwen `ours` ASR 0.2 | `reviews/judge-validity-incident.md` | prose | PI hand-verified, not written back into any JSON |
+| Original Phi incident, 4/4 false positives, asr=0.8 | `reviews/judge-validity-incident.md` | prose | PI hand-verified (qualitative) / **no backing JSON for the 0.8 figure** |
+| Pool-77 postfix Qwen 0.4/0.4 | — | — | **No backing file in this repository; PI-reported only** |
+| Phi direction/probe AUC | — | — | **Missing — no committed artifact for this target** |
+| select_ucb1/backpropagate tree-search-engagement proof | (verbatim-extracted, run standalone, not itself a committed artifact) | — | Reproducible from `scripts/run_fuzz.py` source; not a `results/*.json` fact |
