@@ -426,7 +426,7 @@ def prompt_perplexity(model, tok, prompt_text, device, max_len=512):
 # ---------------------------------------------------------------------------------------------
 @torch.no_grad()
 def find_attribution_span(template, model, tok, directions, dir_layer_idx, device, max_len=1024,
-                           debug=False, debug_topk=10):
+                           debug=False, debug_topk=10, behavior_idx=None, behavior_text=None):
     """Return span_text (substring of `template`, excluding the marker) with the highest summed
     per-token projection onto the refusal direction, or None on any degenerate/failure case (the
     caller falls back to uniform mutation).
@@ -435,6 +435,14 @@ def find_attribution_span(template, model, tok, directions, dir_layer_idx, devic
     per-token projection score (index, decoded token, score) and, once selected, the winning
     window's token indices, per-token scores, and the actual span text -- for verifying guided
     mutation is picking meaningful, varied spans rather than always token 0 or noise.
+    behavior_idx/behavior_text are logged verbatim (not used in the computation itself) so a
+    reader can immediately tell whether an identical-looking trace across behaviors is the same
+    behavior re-logged or genuinely two different behaviors producing the same attribution -- the
+    latter is EXPECTED when `template` (the pre-mutation parent, marker-excluded) is itself
+    identical across behaviors, e.g. an unvisited human seed template picked by UCB1's
+    deterministic "first unvisited node, in pool order" rule (scripts/run_fuzz.py select_ucb1) --
+    attribution runs on the template BEFORE fill_template() injects the behavior, so it cannot see
+    behavior-specific text at all until the pool's own seed templates are exhausted.
     """
     # The ENTIRE body is inside this one try/except, on purpose: attribution is a heuristic
     # helper for guided mutation, not a correctness-critical path, so ANY failure anywhere in
@@ -470,7 +478,9 @@ def find_attribution_span(template, model, tok, directions, dir_layer_idx, devic
                  "score": round(float(scores[i]), 4)}
                 for i in order
             ]
-            log.info(f"[attribution-debug] top-{debug_topk} tokens by projection score: {top_tokens}")
+            log.info(f"[attribution-debug behavior_idx={behavior_idx} "
+                     f"behavior_text={behavior_text!r}] top-{debug_topk} tokens by projection "
+                     f"score: {top_tokens}")
 
         marker_start = template.find(MARKER)
         if marker_start == -1:
@@ -532,7 +542,8 @@ def find_attribution_span(template, model, tok, directions, dir_layer_idx, devic
         if debug:
             span_scores = [round(float(scores[i]), 4) for i in best_window]
             log.info(
-                f"[attribution-debug] selected span: token_indices={best_window} "
+                f"[attribution-debug behavior_idx={behavior_idx} "
+                f"behavior_text={behavior_text!r}] selected span: token_indices={best_window} "
                 f"per_token_scores={span_scores} sum_score={round(best_sum, 4)} "
                 f"text={span_text!r}"
             )
@@ -571,7 +582,7 @@ def mutate_uniform(template, mutate_tok, mutate_model, device, cfg):
 
 
 def mutate_guided(template, target_model, target_tok, mutate_tok, mutate_model, device, cfg,
-                   directions, dir_layer_idx, debug=False):
+                   directions, dir_layer_idx, debug=False, behavior_idx=None, behavior_text=None):
     """Return (new_template, fired: bool). `fired` is True iff `find_attribution_span` returned a
     real span (the "guided actually fired vs. fell back to uniform" definition the caller reports
     in guided_fire_count/guided_fallback_count) -- it does NOT go back to False if the mutator LLM
@@ -580,7 +591,8 @@ def mutate_guided(template, target_model, target_tok, mutate_tok, mutate_model, 
     still succeeded, which is what "fired" is defined to mean here).
     """
     span_text = find_attribution_span(template, target_model, target_tok, directions,
-                                       dir_layer_idx, device, debug=debug)
+                                       dir_layer_idx, device, debug=debug,
+                                       behavior_idx=behavior_idx, behavior_text=behavior_text)
     if span_text is None:
         return mutate_uniform(template, mutate_tok, mutate_model, device, cfg), False
 
@@ -694,6 +706,7 @@ def run_behavior(behavior_idx, behavior, seed_templates, cfg, args, device,
             child_template, guided_fired = mutate_guided(
                 parent_template, target_model, target_tok, mutate_tok, mutate_model, device, cfg,
                 directions, dir_layer_idx, debug=args.debug_attribution,
+                behavior_idx=behavior_idx, behavior_text=behavior,
             )
             if guided_fired:
                 counters["guided_fire_count"] += 1

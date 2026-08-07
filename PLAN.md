@@ -500,3 +500,43 @@ whether the guided-mutation headline holds up. Do not treat the target-difficult
 the guided-vs-uniform ablation as the only possible paper narrative; keep
 `reviews/judge-validity-incident.md` written at paper-evidence quality (it currently is) in case
 it needs to become a section rather than a footnote.
+
+## 12. UCB1 seed-pool exhaustion within budget (found via --debug-attribution, 2026-08-07)
+
+**Finding**: `--debug-attribution` (new flag on `run_fuzz.py`, logs each guided-mutation call's
+token-projection scores + selected span, `behavior_idx`/`behavior_text` included) showed
+behavior 2's attribution trace bit-identical to behavior 1's. Root-caused, not a bug:
+
+1. `select_ucb1()` returns the first `visits==0` node it finds, scanning the pool **in order** —
+   fully deterministic, no randomness in node choice for unvisited nodes.
+2. `load_seed_templates("human", ...)` reads the same fixed CSV
+   (`sherdencooper/GPTFuzz` `GPTFuzzer.csv`) every call — **verified live: 77 rows**, identical
+   text and order for every behavior.
+3. `query_budget` is locked at **40** (§10) — less than 77.
+4. Attribution runs on the **template**, before `fill_template()` injects behavior text (the
+   marker span is explicitly excluded from scoring) — so it cannot see behavior-specific content
+   at all until the pool's original seed nodes are exhausted.
+
+Put together: for `--seedtier human` (the default; `gptfuzzer` forces it), **every iteration of
+every behavior's run selects the next unvisited original seed template, in the same fixed order,
+identical across all behaviors** — the pool never reaches a point within budget where UCB1
+actually chooses to exploit/refine an already-visited (mutated) node. The MCTS-lite exploitation
+half of "MCTS-lite seed selection" is effectively inert at the current budget for `human` seedtier;
+the run is, in practice, a fixed march through 40 of the 77 seed templates, each mutated once.
+
+**Does this invalidate the CIs?** No. Per-behavior independence for ASR/CI purposes rests on the
+**generated completion and judge verdict** being behavior-specific, which they are —
+`fill_template()` injects the real behavior before generation, and `evaluate_completion()` judges
+against that behavior's harm criteria. The mutator LLM's rewrite of the (identical) selected span
+also differs across behaviors because `do_sample=True` draws from a continuously-advancing global
+RNG stream (`set_seed()` runs once, not per behavior — checked, not reseeding). What's identical
+across behaviors is only the **span-selection step** on the shared, pre-injection template.
+
+**What it does affect**: the "guided mutation converges on high-value candidates via UCB1" story
+implied by "MCTS-lite" is not actually exercised within this budget for `human` seedtier — both
+`ours` and `gptfuzzer` share the identical `select_ucb1`/pool code path, so this does not bias the
+guided-vs-uniform comparison, but it does mean neither condition is doing real tree search at
+`query_budget=40` against a 77-template pool. Worth a one-line limitation in the paper's method
+section either way. Not treated as blocking the matrix — raising `query_budget` past 77 or
+subsampling the seed pool are both real fixes but each has its own cost/tradeoff (GPU-hours vs.
+reduced seed diversity); flagging here rather than deciding unilaterally.
