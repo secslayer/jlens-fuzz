@@ -31,9 +31,11 @@ crisis-support resources — zero harmful content. Judge unreliability on person
 completions survives a deliberate, targeted fix; it is not one classifier's quirk.
 
 As a secondary result, we report an honest null. Using the corrected judge, activation-guided
-mutation shows no consistent, reliable ASR advantage over GPTFuzzer's uniform-mutation baseline,
-on either target we tested (Qwen2.5-3B-Instruct, Phi-4-mini-instruct). We independently confirmed
-the guided-mutation mechanism was engaged: attribution fired on every iteration, and search
+span mutation — mutating only the template span with the highest projection onto a
+difference-in-means refusal direction, rather than the whole template — shows no consistent,
+reliable ASR advantage over GPTFuzzer's uniform-mutation baseline, on either target we tested
+(Qwen2.5-3B-Instruct, Phi-4-mini-instruct). We independently confirmed the guided-mutation
+mechanism was engaged: attribution fired on every iteration, and search
 revisited mutated candidates. Attribution *quality*, however, was template- and target-dependent,
 not uniformly refusal-localized — consistent with a guidance signal that only sometimes helps.
 
@@ -45,7 +47,7 @@ jailbreak-fuzzing evaluation infrastructure, not just attack methods, deserves s
 
 Attack success rate (ASR) — the fraction of harmful behaviors for which a fuzzing loop finds at
 least one prompt an LLM complies with — is the standard headline metric in jailbreak-fuzzing
-work, following GPTFuzzer [Yu et al., 2023]. ASR is only as meaningful as the judge that decides
+work, following GPTFuzzer (§2). ASR is only as meaningful as the judge that decides
 "did this completion comply." That judge is frequently a small, frozen, off-the-shelf classifier
 reused across many follow-on papers without re-validation — an implicit assumption that the
 judge itself is a solved problem.
@@ -70,14 +72,16 @@ informative than either finding alone: judge reliability on persona-wrapper / ro
 completions is a persistent problem across judge architectures, not a quirk of one RoBERTa
 classifier.
 
-Our secondary contribution is an honest null result. Using the corrected judge, and with the
-guided-mutation mechanism independently confirmed to be operating as designed (§5.2–5.3),
-activation-guided mutation shows no consistent, reliable ASR advantage over uniform mutation
-on either target we tested (§5.2 — we ran no formal significance test at this sample size; "no
-advantage" here means the raw counts do not consistently favor either method, not a statistically
-established equivalence). We report this as a negative result specifically *because* we can
-rule out "the mechanism never engaged" as the explanation — the null is informative, not an
-artifact of guided mutation quietly falling back to uniform mutation under the hood.
+Our secondary contribution is an honest null result, but a negative finding only earns trust if
+its mechanism actually ran. §5.3 confirms guided mutation's attribution and tree-search
+components were both genuinely engaged throughout every reported run — not silently reduced to
+uniform mutation under the hood. Only against that confirmed-active mechanism does the null become
+informative: using the corrected judge, guided mutation still shows no consistent, reliable ASR
+advantage over uniform mutation on either target (§5.2 — we ran no formal significance test at
+this sample size; "no advantage" here means the raw counts do not consistently favor either
+method, not a statistically established equivalence). We can therefore rule out "the mechanism
+never engaged" as the explanation, distinguishing this null from an artifact of guided mutation
+quietly falling back to uniform behavior.
 
 Both results come with an honest scope limitation: everything here is smoke-scale (n=5 behaviors
 per condition), not the originally planned 25-behavior × 3-seed matrix, because the free-tier
@@ -109,43 +113,41 @@ mutation baseline and as the search scaffold our guided-mutation variant is buil
 novelty in this work is *where* mutation targets a template and *which* judge determines success,
 not the search algorithm itself.
 
-**White-box activation steering / refusal directions.** Arditi et al. [2024, arXiv:2406.11717]
-showed that refusal behavior in instruction-tuned LLMs is mediated, to a first approximation, by a
-single linear direction in activation space, extractable via a difference-in-means contrast
-between harmful and harmless prompt activations, and that ablating or amplifying this direction
-causally affects refusal behavior. We reuse this direction-extraction methodology (§3) but for a
+**White-box activation steering / refusal directions.** Refusal behavior in instruction-tuned LLMs
+is mediated, to a first approximation, by a single linear direction in activation space,
+extractable via a difference-in-means contrast between harmful and harmless prompt activations
+[Arditi et al., 2024, arXiv:2406.11717]; ablating or amplifying this direction causally affects
+refusal behavior. We reuse this direction-extraction methodology (§3) but for a
 different purpose than steering generation directly: we use the direction as a **token-attribution
 signal** to decide *where inside a jailbreak template* a mutation should be targeted, on the
 hypothesis that spans strongly projecting onto the refusal direction are the parts of a template
 most responsible for triggering refusal, and are therefore the highest-value mutation targets.
 This connects to a closely related line of work using refusal-direction signals to directly guide
 or explain jailbreak search — in particular the approach informally referred to in this project's
-planning documents as "Mechanistic AutoDAN"
-[arXiv:2605.28553, "Refusal Before Decoding: Detecting and Exploiting Refusal Signals in
-Intermediate LLM Activations"], which detects and exploits refusal signals in intermediate
-activations directly. We distinguish our approach as targeting the *search/mutation-selection*
+planning documents as "Mechanistic AutoDAN" [Collu et al., 2026, arXiv:2605.28553] ("Refusal
+Before Decoding: Detecting and Exploiting Refusal Signals in Intermediate LLM Activations"), which
+detects and exploits refusal signals in intermediate activations directly. We distinguish our
+approach as targeting the *search/mutation-selection*
 problem (which span of an existing template to rewrite) rather than the decoding/generation
 problem the "Refusal Before Decoding" framing addresses; a precise technical comparison against
 that work is left as future work (we have not run it as a baseline — see §4).
 
 **Jailbreak evaluation and judges.** AutoDAN [Liu et al., 2023, arXiv:2310.04451] and AJF
-[arXiv:2505.23404, "AJF: Adaptive Jailbreak Framework Based on the Comprehension Ability of
-Black-Box Large Language Models"] are cited here as context for the jailbreak-generation
+[Yu et al., 2025, arXiv:2505.23404] are cited here as context for the jailbreak-generation
 literature this project's baselines and method sit alongside — **we did not run either as a
 baseline in this work**; PLAN.md's compute-budget lock (§10, and see §4) scoped the core
 comparison to GPTFuzzer alone as a sufficient baseline for a preprint, with AutoDAN explicitly
 deferred to an extended lane that did not get funded before compute ran out. Separately, a growing
 body of work has begun questioning the reliability of jailbreak judges themselves: "How Reliable
-Is Your Jailbreak Judge? Calibration and Adversarial Robustness of Automated ASR Scoring"
-[arXiv:2606.25487] finds that a large and growing share of reported jailbreak-evaluation results
-using LLM-judges are unreliable, both on average and under deliberate adversarial pressure;
-"LLM-Safety Evaluations Lack Robustness" [arXiv:2503.02574] and "Confusion is the Final Barrier:
-Rethinking Jailbreak Evaluation and Investigating the Real Misuse Threat of LLMs"
-[arXiv:2508.16347] make related robustness/consistency arguments; "'Not Aligned' is Not
-'Malicious': Being Careful about Hallucinations of Large Language Models' Jailbreak"
-[arXiv:2406.11668] specifically discusses judges hallucinating jailbreak success; and "Beyond
-Accuracy: Policy Invariance as a Reliability Test for LLM Safety Judges" [arXiv:2605.06161]
-proposes a reliability test in the same spirit as our residual-false-positive check. We situate
+Is Your Jailbreak Judge?" [Gao et al., 2026, arXiv:2606.25487] finds that a large and growing
+share of reported jailbreak-evaluation results using LLM-judges are unreliable, both on average
+and under deliberate adversarial pressure; "LLM-Safety Evaluations Lack Robustness"
+[Beyer et al., 2025, arXiv:2503.02574] and "Confusion is the Final Barrier" [Yan et al., 2025,
+arXiv:2508.16347] make related robustness/consistency arguments; "'Not Aligned' is Not
+'Malicious'" [Mei et al., 2024, arXiv:2406.11668] specifically discusses judges hallucinating
+jailbreak success; and "Beyond Accuracy: Policy Invariance as a Reliability Test for LLM Safety
+Judges" [Weng et al., 2026, arXiv:2605.06161] proposes a reliability test in the same spirit as
+our residual-false-positive check. We situate
 this paper's primary contribution within this cluster: rather than a general audit or a new
 reliability *metric*, we contribute a specific, reproducible, hand-verified case study of a
 widely-reused classifier judge failing, a concrete fix, and — the part we believe is
@@ -518,10 +520,10 @@ targeting AdvBench behaviors, some of which concern self-harm and other sensitiv
   drifts away from a refusal trajectory mid-generation, independent of whether guided mutation
   itself proves useful as an attack method. We suggest this as a concrete defensive application
   of the same interpretability signal studied here.
-- **Disclosure.** **[DRAFT FLAG — action item, not yet done.]** Per PLAN.md §8, disclosure to the
-  affected open-weight model maintainers should happen before this paper is made public, in
-  particular given the transfer-target design (§4) — this has not yet occurred as of this draft
-  and should be completed, and the outcome documented here, before submission.
+- **Disclosure.** **[DRAFT FLAG — action item, not yet done.]** Per PLAN.md's own §8 (its ethics
+  gate), disclosure to the affected open-weight model maintainers should happen before this paper
+  is made public — this has not yet occurred as of this draft and should be completed, and the
+  outcome documented here, before submission.
 
 ## 8. Conclusion
 
@@ -529,7 +531,7 @@ Two findings, both artifact-backed. First, judge reliability in jailbreak fuzzin
 cross-architecture problem, not a quirk of one classifier: the original RoBERTa judge inflated
 success via template-echo false positives, and a deliberately stricter, anti-roleplay LLM-as-judge
 rubric — built specifically to catch that failure mode — still leaked a persona-wrapper false
-positive (the ChadGPT case, §5.1). Second, activation-guided span mutation shows no consistent,
+positive (the ChadGPT case, §5.1). Second, guided mutation shows no consistent,
 reliable ASR advantage over uniform mutation on either target tested (§5.2), and this null comes
 with a mechanistic explanation rather than standing unexamined: the token-attribution signal
 driving guided mutation is only sometimes informative, and its reliability tracks the underlying
@@ -556,25 +558,26 @@ run: the full 25-behavior × 3-seed matrix (§4, §6), with the corrected judge,
   Models." arXiv:2310.04451, 2023.
 - Arditi, A. et al. "Refusal in Language Models Is Mediated by a Single Direction."
   arXiv:2406.11717, 2024.
-- "'Not Aligned' is Not 'Malicious': Being Careful about Hallucinations of Large Language Models'
-  Jailbreak." arXiv:2406.11668, 2024.
-- "LLM-Safety Evaluations Lack Robustness." arXiv:2503.02574, 2025.
-- "AJF: Adaptive Jailbreak Framework Based on the Comprehension Ability of Black-Box Large
-  Language Models." arXiv:2505.23404, 2025.
-- "Confusion is the Final Barrier: Rethinking Jailbreak Evaluation and Investigating the Real
-  Misuse Threat of LLMs." arXiv:2508.16347, 2025.
-- "Beyond Accuracy: Policy Invariance as a Reliability Test for LLM Safety Judges."
-  arXiv:2605.06161, 2026.
-- "Refusal Before Decoding: Detecting and Exploiting Refusal Signals in Intermediate LLM
-  Activations" (informally "Mechanistic AutoDAN" in this project's internal planning docs).
-  arXiv:2605.28553, 2026.
-- "How Reliable Is Your Jailbreak Judge? Calibration and Adversarial Robustness of Automated ASR
-  Scoring." arXiv:2606.25487, 2026.
+- Mei, L. et al. "'Not Aligned' is Not 'Malicious': Being Careful about Hallucinations of Large
+  Language Models' Jailbreak." arXiv:2406.11668, 2024.
+- Beyer, T. et al. "LLM-Safety Evaluations Lack Robustness." arXiv:2503.02574, 2025.
+- Yu, M. et al. "AJF: Adaptive Jailbreak Framework Based on the Comprehension Ability of
+  Black-Box Large Language Models." arXiv:2505.23404, 2025.
+- Yan, Y. et al. "Confusion is the Final Barrier: Rethinking Jailbreak Evaluation and
+  Investigating the Real Misuse Threat of LLMs." arXiv:2508.16347, 2025.
+- Weng, S. et al. "Beyond Accuracy: Policy Invariance as a Reliability Test for LLM Safety
+  Judges." arXiv:2605.06161, 2026.
+- Collu, M. G. et al. "Refusal Before Decoding: Detecting and Exploiting Refusal Signals in
+  Intermediate LLM Activations" (informally "Mechanistic AutoDAN" in this project's internal
+  planning docs). arXiv:2605.28553, 2026.
+- Gao, Y. et al. "How Reliable Is Your Jailbreak Judge? Calibration and Adversarial Robustness of
+  Automated ASR Scoring." arXiv:2606.25487, 2026.
 
-**[DRAFT FLAG]** All arXiv IDs above were checked live against arxiv.org (title match confirmed)
-during drafting, but full bibliographic details (venue, exact author lists) have not been
-independently verified beyond the arXiv abstract page title — standard BibTeX entries should be
-pulled before submission.
+**[DRAFT FLAG]** All arXiv IDs above were checked live against arxiv.org during drafting (title
+match confirmed, and first-author names confirmed via each page's `citation_author` metadata),
+but full bibliographic details (venue, complete author lists beyond the first author, page
+numbers) have not been independently verified — standard BibTeX entries should be pulled before
+submission.
 
 ## Appendix A — Full provenance table
 
