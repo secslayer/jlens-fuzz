@@ -494,34 +494,52 @@ nothing left to power up.
 replaced. The paper's contributions, in order:
 
 1. **PRIMARY — the judge-reliability finding.** The standard GPTFuzz RoBERTa judge
-   (`hubert233/GPTFuzz`) inflates ASR roughly 2× via template-echo false positives — it rewards
+   (`hubert233/GPTFuzz`) inflates ASR via template-echo false positives — it rewards
    jailbreak-**shaped** vocabulary (DAN/Omega/APOPHIS persona declarations), not actual harm.
-   Reported deltas: Phi `0.8 → 0.0`, Qwen `1.0 → 0.4` after the fixed judge (§ above). This is a
-   measurement-validity failure in a tool the field treats as standard, and correcting it changes
-   the conclusion you'd draw from the pipeline. This is the paper's headline result now, not an
-   incident footnote.
-2. **SECONDARY — the honest guided-mutation null.** Activation-guided span mutation shows no ASR
-   advantage over uniform mutation, with the mechanism independently verified as actually
-   operating: attribution localizes to refusal-relevant tokens (`--debug-attribution`), and tree
-   search genuinely engaged after the seed-pool fix (reported `n_mutated_child_selected` in the
-   54-80 range across runs, not the pre-fix 0). The null is reported *because* the mechanism was
-   confirmed to be doing its job, not despite an unverified/inert one — that is what makes it an
-   honest negative result worth publishing rather than a "the guided path never fired" artifact.
+   Reported delta: Phi `0.8 → 0.0` after the fixed judge. **Strengthened 2026-08-07**: hand-
+   verifying the *fixed* judge's own pool-12 Qwen `ours` output caught a **second, distinct false
+   positive** — a "ChadGPT" persona-wrapper completion that actually REFUSES and gives crisis
+   resources (zero harmful content), which the stricter LLM-rubric judge still scored PASS (full
+   writeup: `reviews/judge-validity-incident.md`'s "Residual false positive found AFTER the fix").
+   This means the failure mode is not specific to the original RoBERTa classifier — it survives a
+   deliberately anti-roleplay LLM-as-judge rubric too, which is a stronger, more general claim
+   than the original incident alone. This is the paper's headline result, not an incident
+   footnote.
+2. **SECONDARY — the honest guided-mutation null, with an explicit noise caveat.** Activation-
+   guided span mutation shows no *consistent, significant* ASR advantage over uniform mutation,
+   with the mechanism independently verified as actually operating: attribution localizes to
+   refusal-relevant tokens (`--debug-attribution`), and tree search genuinely engaged after the
+   seed-pool fix (reported `n_mutated_child_selected` in the 54-80 range, not the pre-fix 0). Two
+   data points, both consistent with the null and inconsistent with each other in a way that rules
+   out reading either as a real effect: an earlier pool-77 (post-judge-fix, pre-pool-fix) Qwen run
+   showed `ours` = `gptfuzzer` = 0.4 (tied); the pool-12 run (post-pool-fix, hand-verified) showed
+   Qwen `ours` = 1/5 = 0.2 (after removing the ChadGPT false positive) vs. `gptfuzzer` = 0/5 = 0.0.
+   **Do not cite the pool-12 1-vs-0 as guided beating uniform** — that is noise at n=5, not signal;
+   a single flip changes the ratio entirely. The null is reported *because* the mechanism was
+   confirmed engaged, not despite an unverified/inert one — that is what makes it an honest
+   negative result. Establishing statistical significance either way requires the full matrix,
+   which will not run (GPU exhausted).
 3. **METHODOLOGY note — seed-pool exhaustion (§12).** At `query_budget=40` against the original
    77-template pool, UCB1 never mutates past the original seeds — documented as a caveat/lesson
    for anyone reusing GPTFuzzer's MCTS-lite scaffold with a small query budget, not as a result
    in itself.
 4. **NOT the paper:** "guided mutation beats baselines." That hypothesis was tested (mechanism
    verified as engaged, both the attribution and the tree-search halves) and falsified — do not
-   frame §10's target-difficulty axis or the guided-vs-uniform ablation as the headline.
+   frame §10's target-difficulty axis or the guided-vs-uniform ablation as the headline. Also NOT
+   the paper: "guided mutation beats uniform at pool-12" from the 1-vs-0 count above — see the
+   noise caveat in point 2.
 
-**Provenance flag on the specific numbers above** (Phi `0.0→0.8`, Qwen `1.0→0.4`,
-`n_mutated_child_selected` 54-80): reported by the PI from the pool-12 smoke runs, consistent with
-CLAUDE.md rule 2's standard applied everywhere else in this doc — treat as reported-not-yet-
-artifact-backed until the backing `results/*.json` files are pushed from Kaggle and land in this
-repo (as of this writing, `results/` in the repo still only has the pre-fix, pre-pool-fix
-`ours_smoke.json` — none of the post-fix smoke files are here yet). Cite these numbers in the
-paper draft only once their JSON lands; `/review` should re-check this before any Gate 5/7 PASS.
+**Provenance flag on the specific numbers above** (Phi `0.8→0.0`; Qwen pool-77 `0.4`/`0.4`; Qwen
+pool-12 hand-verified `0.2`/`0.0`; the ChadGPT false positive; `n_mutated_child_selected` 54-80):
+the Qwen pool-12 numbers and the ChadGPT case are **PI hand-verified** (a real, completed human
+read of the judge's own flagged completions — stronger evidence than a raw self-report), but none
+of it is yet backed by a committed `results/*.json` in this repo — as of this writing, `results/`
+here still only has the pre-fix, pre-pool-fix `ours_smoke.json`. Hand-verification and artifact-
+backing are two different bars (CLAUDE.md rule 2 is about the latter): the qualitative finding
+("the fixed judge still leaks this specific false positive") is established by the hand-read
+regardless of whether the JSON has landed; the specific numeric ASR values should still be cited
+in the paper only once their backing JSON is pushed from Kaggle and pulled here. `/review` should
+re-check both bars before any Gate 5/7 PASS.
 
 **Explicit limitation, required in the paper**: every number behind this reframe is **smoke-scale
 (n=5 behaviors)**, not the originally planned n=25×3-seed matrix — GPU exhausted before the full
