@@ -425,10 +425,16 @@ def prompt_perplexity(model, tok, prompt_text, device, max_len=512):
 # Token-attribution span selection (Component 3, guided mutation)
 # ---------------------------------------------------------------------------------------------
 @torch.no_grad()
-def find_attribution_span(template, model, tok, directions, dir_layer_idx, device, max_len=1024):
+def find_attribution_span(template, model, tok, directions, dir_layer_idx, device, max_len=1024,
+                           debug=False, debug_topk=10):
     """Return span_text (substring of `template`, excluding the marker) with the highest summed
     per-token projection onto the refusal direction, or None on any degenerate/failure case (the
     caller falls back to uniform mutation).
+
+    debug=True (wired from --debug-attribution) logs, for every call: the top-k tokens by raw
+    per-token projection score (index, decoded token, score) and, once selected, the winning
+    window's token indices, per-token scores, and the actual span text -- for verifying guided
+    mutation is picking meaningful, varied spans rather than always token 0 or noise.
     """
     # The ENTIRE body is inside this one try/except, on purpose: attribution is a heuristic
     # helper for guided mutation, not a correctness-critical path, so ANY failure anywhere in
@@ -442,6 +448,7 @@ def find_attribution_span(template, model, tok, directions, dir_layer_idx, devic
         # HF tokenizers return the key "offset_mapping" (singular "offset") even though the
         # kwarg above is "return_offsetS_mapping" (plural) -- easy to typo.
         offsets = enc.pop("offset_mapping")[0].tolist()  # [T, 2] char spans per token
+        input_ids = enc["input_ids"][0].tolist()  # captured before .to(device), for debug decode
         enc = enc.to(device)
         out = model(**enc, output_hidden_states=True)
         hs = torch.stack(out.hidden_states[1:], dim=0)  # [L, 1, T, H]
@@ -455,6 +462,15 @@ def find_attribution_span(template, model, tok, directions, dir_layer_idx, devic
         layer_hidden = hs[dir_layer_idx, 0].float().cpu().numpy()  # [T, H]
         scores = layer_hidden @ directions[dir_layer_idx]  # [T]
         n_tokens = len(scores)
+
+        if debug:
+            order = np.argsort(scores)[::-1][:debug_topk]
+            top_tokens = [
+                {"idx": int(i), "token": tok.convert_ids_to_tokens([input_ids[i]])[0],
+                 "score": round(float(scores[i]), 4)}
+                for i in order
+            ]
+            log.info(f"[attribution-debug] top-{debug_topk} tokens by projection score: {top_tokens}")
 
         marker_start = template.find(MARKER)
         if marker_start == -1:
@@ -512,6 +528,15 @@ def find_attribution_span(template, model, tok, directions, dir_layer_idx, devic
         if not span_text.strip():
             log.warning("degenerate empty attribution span; falling back to uniform mutation")
             return None
+
+        if debug:
+            span_scores = [round(float(scores[i]), 4) for i in best_window]
+            log.info(
+                f"[attribution-debug] selected span: token_indices={best_window} "
+                f"per_token_scores={span_scores} sum_score={round(best_sum, 4)} "
+                f"text={span_text!r}"
+            )
+
         return span_text
     except Exception as e:  # noqa: BLE001 - never crash the loop over an attribution failure
         log.warning(f"token-attribution span selection failed ({e}); falling back to uniform mutation")
@@ -546,7 +571,7 @@ def mutate_uniform(template, mutate_tok, mutate_model, device, cfg):
 
 
 def mutate_guided(template, target_model, target_tok, mutate_tok, mutate_model, device, cfg,
-                   directions, dir_layer_idx):
+                   directions, dir_layer_idx, debug=False):
     """Return (new_template, fired: bool). `fired` is True iff `find_attribution_span` returned a
     real span (the "guided actually fired vs. fell back to uniform" definition the caller reports
     in guided_fire_count/guided_fallback_count) -- it does NOT go back to False if the mutator LLM
@@ -555,7 +580,7 @@ def mutate_guided(template, target_model, target_tok, mutate_tok, mutate_model, 
     still succeeded, which is what "fired" is defined to mean here).
     """
     span_text = find_attribution_span(template, target_model, target_tok, directions,
-                                       dir_layer_idx, device)
+                                       dir_layer_idx, device, debug=debug)
     if span_text is None:
         return mutate_uniform(template, mutate_tok, mutate_model, device, cfg), False
 
@@ -668,7 +693,7 @@ def run_behavior(behavior_idx, behavior, seed_templates, cfg, args, device,
         else:
             child_template, guided_fired = mutate_guided(
                 parent_template, target_model, target_tok, mutate_tok, mutate_model, device, cfg,
-                directions, dir_layer_idx,
+                directions, dir_layer_idx, debug=args.debug_attribution,
             )
             if guided_fired:
                 counters["guided_fire_count"] += 1
@@ -822,6 +847,16 @@ def main():
                           "variants of the same (target, method) condition (PLAN.md §10's "
                           "3-seeds-per-condition rigor requirement) without needing a separate "
                           "config file per seed. Defaults to cfg['seed'] when not given.")
+    ap.add_argument("--debug-attribution", action="store_true",
+                     help="log, for every guided-mutation call: the top-k tokens by raw "
+                          "projection score onto the refusal direction, and the selected span's "
+                          "token indices/per-token scores/text. Diagnostic only -- for verifying "
+                          "guided mutation picks meaningful, varied spans, not always token 0 or "
+                          "noise. No effect when --mutation uniform or --method gptfuzzer.")
+    ap.add_argument("--n-behaviors", type=int, default=None,
+                     help="override cfg['smoke_behaviors']/cfg['n_behaviors'] with an exact "
+                          "count -- for cheap ad-hoc diagnostic runs (e.g. --debug-attribution) "
+                          "that don't need a full smoke. Does not affect --out/_smoke naming.")
     args = ap.parse_args()
 
     if args.method == "autodan":
@@ -874,7 +909,10 @@ def main():
             "fuzzing run on CPU will be extremely slow. Real runs happen on Kaggle GPU."
         )
 
-    n_behaviors = cfg["smoke_behaviors"] if args.smoke else cfg["n_behaviors"]
+    if args.n_behaviors is not None:
+        n_behaviors = args.n_behaviors
+    else:
+        n_behaviors = cfg["smoke_behaviors"] if args.smoke else cfg["n_behaviors"]
     behaviors = load_behaviors(cfg["benchmark"], n_behaviors, seed)
     log.info(f"sampled {len(behaviors)} behaviors from {cfg['benchmark']} (seed={seed}, "
              f"smoke={args.smoke})")
