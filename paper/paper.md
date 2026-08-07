@@ -393,9 +393,11 @@ unconfirmed:
   A separate, independently-collected 2-behavior `--debug-attribution` diagnostic run (below) shows
   the first `MUTATED_CHILD` pool selection firing at **iteration 24** on Qwen
   (`results/debug_attribution_qwen.log`, `behavior_idx=1`) — matching, to the exact iteration, the
-  worst-case prediction from §4's standalone `select_ucb1`/`backpropagate` simulation. This is
-  independent corroboration, from a real run, of a claim §4 previously supported only with a
-  synthetic simulation.
+  worst-case prediction from §4's standalone `select_ucb1`/`backpropagate` simulation. The
+  independent Phi debug run shows the identical pattern: first `MUTATED_CHILD` also at
+  **iteration 24** (`results/debug_attribution_phi.log`, `behavior_idx=0`). This is independent
+  corroboration, from two real runs on two different targets, of a claim §4 previously supported
+  only with a synthetic simulation.
 
 **Attribution quality: real, quantified, and *not* uniform (corrected from an earlier draft).**
 An earlier version of this section claimed attribution "localizes to refusal-relevant tokens,"
@@ -451,6 +453,14 @@ signal, which is a more specific and more useful finding than an undifferentiate
 - **Compute-constrained matrix abandonment, not a scheduling deferral.** We state this plainly
   rather than imply the full matrix is merely "future work in progress": it will not run under
   this project's current resourcing.
+- **Single run per condition — no seed replicates.** Every §5.2/§5.3 number comes from exactly one
+  run per (target, method) pair (`seed=0`; `configs/exp.yaml`/`configs/exp_phi4mini.yaml`). The
+  originally planned 3-seed replication (`_seed1`/`_seed2` variants, `experiments.yaml`) did not
+  run — same compute exhaustion as the behavior-count limitation above, but a distinct concern:
+  even at n=5 behaviors, we have no run-to-run variance estimate at all, so we cannot say whether
+  a different `--seed` would reproduce the same 2-vs-0 / 1-vs-0 split or land differently. This is
+  a second, independent reason (beyond n=5's small behavior count) the guided-vs-uniform null
+  should not be read as precisely quantified.
 - **Same-vendor judge LLM.** The rubric-based LLM judge (`microsoft/Phi-3.5-mini-instruct`) is
   same-vendor as one of the two attack targets (`microsoft/Phi-4-mini-instruct`) — a different
   checkpoint and training run, and never grading its own outputs, but not a fully
