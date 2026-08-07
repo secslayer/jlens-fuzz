@@ -173,22 +173,60 @@ Start `claude` in the repo. Core moves:
 - [K] bench: smoke it at 5 behaviors (`--smoke` path or n_behaviors:5). Confirm >=1 judged jailbreak.
 - `/review 3`.
 
-**Day 4 - Stage 4 (headline ablations) + kick off full runs.**
-- [L] `/orchestrate core` -> `ours, gptfuzzer, abl_mut_uniform, abl_seed_random,
-  abl_seed_bootstrap, validate` become ready -> launch the first batch on the 2 commit runners (Part 6).
+**Day 4 - Stage 4 (headline ablations) + kick off full runs.** — **ABANDONED 2026-08-07, GPU
+exhausted (PLAN.md §11).** Originally planned: `/orchestrate core` -> `ours, gptfuzzer,
+abl_mut_uniform, abl_seed_random, abl_seed_bootstrap, validate` become ready -> launch the first
+batch on the 2 commit runners (Part 6), at full `n_behaviors=25`. **What happened instead**: the
+seed-pool-size fix (PLAN.md §12) was validated with a 5-behavior `ours`/`gptfuzzer` smoke on both
+targets first, to confirm guided mutation's mechanism actually engages before spending GPU-hours
+on the full matrix. It came back a validated null (guided=uniform) before more budget existed.
+These jobs remain `ready` in `experiments.yaml` (nothing wrong with them) but will not be
+launched — there is no GPU budget left, and the smoke-scale null already answers what they
+existed to give statistical power to.
 
-**Day 5 - Stage 5 (finish the matrix in parallel).**
-- [B] Keep the controller's batches flowing across the 2 runners until all core method/ablation jobs
-  are done. [H] Gate 5: hand-validate ~50 judge labels; assert identical `configs/exp.yaml`. `/review 5`.
+**Day 5 - Stage 5 (finish the matrix in parallel).** — **ABANDONED 2026-08-07**, same reason as
+Day 4: no matrix left to finish, no runners to keep flowing. Gate 5's requirement survives at
+**reduced scope**: hand-validate the judge labels you actually have (the smoke-scale completions
+plus the judge-incident hand-reads already done — 4 Phi false positives, 3 Qwen spot-checks, see
+`reviews/judge-validity-incident.md`) and assert `configs/exp.yaml`/`configs/exp_phi4mini.yaml`
+stayed identical across both targets' smoke runs. Run `/review 5` explicitly against this reduced
+scope — do not skip the gate just because the full-scale trigger for it never arrived.
 
-**Day 6 - Stage 6 (local transfer + figures).**
+> **Before Day 6/7**: as of 2026-08-07, `results/` in this repo only has the pre-judge-fix,
+> pre-pool-fix `ours_smoke.json` — none of the post-fix pool-12 smoke JSONs (the ones the Day 6/7
+> narrative below is based on) have been pushed from Kaggle and pulled here yet. The specific
+> numbers driving that narrative (Phi `0.8→0.0`, Qwen `1.0→0.4`, `n_mutated_child_selected`
+> 54-80) are **PI-reported, not yet artifact-backed** (CLAUDE.md rule 2) until those files land —
+> same caveat as PLAN.md §11. Push + `git pull` first; `/review 6`/`/review 7` should recheck this
+> before PASS.
+
+**Day 6 - Stage 6 (local transfer + figures).** — Still applies, scoped to what's actually on
+disk (smoke JSONs, not the full matrix — see caveat above).
 - [L] builder: `scripts/transfer_blackbox.py` (`--local`, target from `transfer_target_local`) and
   `scripts/make_figures.py`. Push.
-- [L] `/orchestrate core` -> `transfer_local` then `figures` become ready -> run them. `/review 6`.
+- [L] `/orchestrate core` -> `transfer_local` then `figures` become ready -> run them against the
+  smoke-scale results. Figures should show `n=5` confidence intervals, not matrix-scale ones, and
+  say so on the figure itself. `transfer_blackbox.py` replays *successful* prompts — check first
+  whether the smoke runs produced any (`success: true` records); if ASR is at or near 0 on both
+  methods (plausible post-judge-fix), there may be nothing to transfer — state that rather than
+  skipping it silently. `/review 6`.
 
-**Day 7 - Stage 7 (write + release).**
-- [L] builder: `scripts/assemble_paper.py`; draft `paper/` from `results/*.json` only. Related-work
-  must distinguish Mechanistic AutoDAN (2605.28553). Ethics section required. `/review 7`, [H] sign-off.
+**Day 7 - Stage 7 (write + release).** — Still applies; `assemble_paper.py`/ethics
+section/Mechanistic AutoDAN (2605.28553) distinction requirements unchanged. Narrative follows
+PLAN.md §11's **DECIDED reframe**:
+- **PRIMARY**: the judge-reliability finding — `hubert233/GPTFuzz` inflates ASR via template-echo
+  false positives, a measurement-validity failure in a tool the field treats as standard.
+- **SECONDARY**: the honest guided-mutation null — no ASR advantage over uniform mutation, with
+  the mechanism independently verified as engaged (attribution + tree search both confirmed
+  operating, PLAN.md §12).
+- **METHODOLOGY note**: seed-pool exhaustion at `query_budget=40` vs. a 77-template pool (§12) —
+  a caveat for reuse, not a result.
+- **NOT the paper**: "guided mutation beats baselines" — tested and falsified, do not frame it as
+  the headline.
+- State the **smoke-scale (n=5) limitation** up front, not buried — the paper should not imply
+  matrix-scale statistical power it does not have.
+- [L] builder: `scripts/assemble_paper.py`; draft `paper/` from `results/*.json` only. `/review 7`,
+  [H] sign-off.
 
 ---
 
