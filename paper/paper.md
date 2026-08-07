@@ -544,8 +544,8 @@ unexamined positive one, and more informative still than a null whose mechanism 
 
 The practical takeaway: activation-guided jailbreak attacks should be evaluated against verified,
 adversarially-checked judges, and are only as promising as the separation quality of the
-interpretability signal steering them — a weak refusal direction should not be expected to produce
-a strong guided-mutation advantage. The honest next step is the evaluation this paper could not
+interpretability signal steering them — a weak refusal direction may not support a strong
+guided-mutation advantage. The honest next step is the evaluation this paper could not
 run: the full 25-behavior × 3-seed matrix (§4, §6), with the corrected judge, once compute allows.
 
 ## References
