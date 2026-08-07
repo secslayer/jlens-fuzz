@@ -4,18 +4,34 @@
 Reads experiments.yaml, infers each job's status purely from whether its `produces` file exists
 on disk (so it is RESUMABLE across dead Kaggle sessions — no external state to lose), then prints:
   1. a status board (done / ready / blocked),
-  2. the next batch of runnable jobs packed onto your Kaggle budget
-     (GPUS per session x COMMIT_SLOTS sessions), as copy-paste launch lines.
+  2. the next batch of runnable jobs packed onto your Kaggle budget, as copy-paste launch lines.
+
+Packing depends on whether a job calls the judge LLM (scripts/judge.py, added 2026-08-07: the
+judge now lives on its own GPU, cuda:1, separate from the target on cuda:0 -- an earlier 8-bit
+quantization attempt to share one GPU was abandoned as unreliable on Kaggle). Only `probes*`/
+`direction*` jobs (plain feature extraction, no generation/judging at all) can still share one
+notebook two-at-a-time via scripts/run_parallel.sh's `JOB_A=/JOB_B=` mode, one GPU each. Every
+other ready job ("judged") needs BOTH GPUs and runs alone per notebook via `JOB=`. See PLAN.md
+§11 for the full writeup of why.
 
 Usage:
   python scripts/run_controller.py --lane core            # 1-week preprint jobs
   python scripts/run_controller.py --lane all             # + extended
-  python scripts/run_controller.py --lane core --gpus 2 --commit-slots 2
+  python scripts/run_controller.py --lane core --commit-slots 2
 Needs only pyyaml; runs on any machine (no GPU).
 """
 import argparse
 import os
 import yaml
+
+UNJUDGED_PREFIXES = ("probes", "direction")
+
+
+def is_unjudged(job_id):
+    """True for jobs that never call the judge LLM (scripts/train_probes.py,
+    scripts/extract_direction.py -- feature extraction only) and so can still share a single
+    GPU / a notebook two-at-a-time. Everything else calls scripts/judge.py and needs both GPUs."""
+    return job_id.startswith(UNJUDGED_PREFIXES)
 
 
 def load(manifest):
@@ -35,8 +51,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", default="experiments.yaml")
     ap.add_argument("--lane", choices=["core", "extended", "all"], default="core")
-    ap.add_argument("--gpus", type=int, default=2, help="GPUs per session (Kaggle T4x2 = 2)")
-    ap.add_argument("--commit-slots", type=int, default=2, help="concurrent commit notebooks")
+    ap.add_argument("--commit-slots", type=int, default=2, help="concurrent commit notebooks "
+                     "(each has its own 2 T4s; a judged job uses both of ITS notebook's GPUs, "
+                     "so 2 different judged jobs can still run concurrently in 2 notebooks)")
     args = ap.parse_args()
 
     defaults, jobs = load(args.manifest)
@@ -70,19 +87,46 @@ def main():
                else " finish in-flight jobs, then re-run me."))
         return
 
-    # Pack: each commit notebook runs `gpus` jobs in parallel; you have `commit-slots` notebooks.
-    capacity = args.gpus * args.commit_slots
-    batch = ready[:capacity]
-    print(f"\n=== next batch ({len(batch)} of {len(ready)} ready; capacity {capacity}) ===")
-    per_nb = args.gpus
-    for nb in range(0, len(batch), per_nb):
-        pair = batch[nb:nb + per_nb]
-        slot = nb // per_nb + 1
-        env = " ".join(f"JOB_{chr(65+i)}={jid}" for i, jid in enumerate(pair))
-        print(f"# --- Kaggle commit notebook {slot} (jlens-run-{chr(64+slot)}): put this after the bootstrap cell ---")
-        print(f"!{env} bash scripts/run_parallel.sh")
-    if len(ready) > capacity:
-        print(f"\n({len(ready) - capacity} more ready — launch them next round after these finish.)")
+    # Pack: unjudged jobs (probes*/direction*) pair up 2-per-notebook, 1 GPU each -- same as
+    # before. Judged jobs (everything else, calls scripts/judge.py) get 1 per notebook, both
+    # GPUs. See this file's module docstring / PLAN.md §11 for why.
+    unjudged = [j for j in ready if is_unjudged(j)]
+    judged = [j for j in ready if not is_unjudged(j)]
+    print(f"\n=== next batch (commit-slots={args.commit_slots}) ===")
+    print(f"ready: {len(unjudged)} unjudged (pairs 2/notebook), {len(judged)} judged (1/notebook, both GPUs)")
+
+    launched = []
+    slot = 0
+    ui = 0
+    while ui + 1 < len(unjudged) and slot < args.commit_slots:
+        slot += 1
+        a, b = unjudged[ui], unjudged[ui + 1]
+        print(f"# --- Kaggle commit notebook {slot} (jlens-run-{chr(64 + slot)}): unjudged pair, 1 GPU each ---")
+        print(f"!JOB_A={a} JOB_B={b} bash scripts/run_parallel.sh")
+        launched += [a, b]
+        ui += 2
+    if ui < len(unjudged) and slot < args.commit_slots:
+        # odd one out -- runs alone via JOB_A=, GPU1 idle for this notebook (unjudged jobs
+        # never need the 2nd GPU anyway).
+        slot += 1
+        a = unjudged[ui]
+        print(f"# --- Kaggle commit notebook {slot} (jlens-run-{chr(64 + slot)}): unjudged, alone (2nd GPU idle) ---")
+        print(f"!JOB_A={a} bash scripts/run_parallel.sh")
+        launched.append(a)
+        ui += 1
+
+    ji = 0
+    while ji < len(judged) and slot < args.commit_slots:
+        slot += 1
+        j = judged[ji]
+        print(f"# --- Kaggle commit notebook {slot} (jlens-run-{chr(64 + slot)}): judged, both GPUs (target cuda:0, judge cuda:1) ---")
+        print(f"!JOB={j} bash scripts/run_parallel.sh")
+        launched.append(j)
+        ji += 1
+
+    remaining = len(ready) - len(launched)
+    if remaining > 0:
+        print(f"\n({remaining} more ready — launch them next round after these finish.)")
     print("\nafter each session: push results/ back to GitHub, then re-run me to get the next batch.")
 
 

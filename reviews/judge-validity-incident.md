@@ -105,17 +105,38 @@ changes the outcome in the expected direction, not just in theory.
 yet. Treat this section as a reported, plausible, but not yet artifact-backed result until that
 file lands — same standard applied to every other number in this project (CLAUDE.md rule 2).
 
-## A second blocker found and fixed: judge OOM on a single T4 (2026-08-06)
+## A second blocker found — judge OOM on a single T4 (2026-08-06, fix revised 2026-08-07)
 
 The first LIVE fresh-judge smoke attempt (not a re-score) crashed: Phi-4-mini (target, fp16) +
 Phi-3.5-mini (judge_llm, fp16) + the RoBERTa diagnostic judge together exceed one T4's 16GB.
-Fixed by loading the judge LLM in 8-bit (`scripts/judge.py`'s `load_judge_llm()`, via
-`bitsandbytes`) — quantizing the judge doesn't touch the target's activations the probe/direction
-machinery depends on, so it's scientifically safe; the target model itself must always stay fp16
-(PLAN.md §10). Deliberately NOT fixed by moving the judge to a second GPU: `run_parallel.sh` pins
-each job to one GPU via `CUDA_VISIBLE_DEVICES`, so a script explicitly addressing "the other" GPU
-would silently misbehave under that pinning and would halve Kaggle's parallel-job throughput for
-every judged run, not just this one.
+
+**First attempt (2026-08-06), abandoned**: load the judge LLM in 8-bit via `bitsandbytes`
+(quantizing the judge doesn't touch the target's activations the probe/direction machinery
+depends on, so it's scientifically safe — the target model itself always stays fp16, PLAN.md
+§10). Deliberately not fixed by a second GPU at the time: `run_parallel.sh` pinned each job to
+one GPU via `CUDA_VISIBLE_DEVICES`, so a script explicitly addressing "the other" GPU would
+silently misbehave under that pinning. **Abandoned 2026-08-07**: bitsandbytes proved unreliable
+on Kaggle (import/CUDA issues) and the smoke still OOM'd regardless.
+
+**Current fix (2026-08-07): target and judge on separate GPUs, no quantization at all.**
+`scripts/judge.py`'s `load_judge_llm()` places the judge on its own GPU (`judge_device`, default
+`cuda:1`, full fp16) — Kaggle gives 2 T4s per session, so use both instead of trying to fit both
+models on one. The target stays `cuda:0` fp16, entirely unaffected. This reverses the earlier
+"don't use a second GPU" decision — that concern (breaking `run_parallel.sh`'s per-job GPU
+pinning) was correct but is now solved properly instead of avoided:
+- `scripts/run_parallel.sh` gained a `JOB=<id>` launch mode: full 2-GPU visibility, no
+  `CUDA_VISIBLE_DEVICES` restriction, for judged jobs. The old `JOB_A=`/`JOB_B=` pinned-pair mode
+  is kept for `probes`/`direction` (the only jobs that never call the judge).
+- `scripts/run_controller.py`'s batch packing is now judged/unjudged-aware: unjudged jobs still
+  pair up 2-per-notebook; judged jobs (everything else) pack 1-per-notebook, both GPUs.
+- **Real, not-eliminated throughput tradeoff**: a judged job occupies both GPUs of its
+  notebook/session, so two judged jobs can no longer share one notebook. They still run
+  concurrently across the 2 separate commit notebooks (each has its own 2 T4s) — one judged job
+  per notebook instead of two independent single-GPU jobs.
+- `resolve_judge_device()` falls back to sharing `cuda:0` with the target (logging a loud
+  warning) if a job is somehow launched without 2-GPU visibility, rather than crashing outright —
+  but that fallback recreates the exact OOM this fix exists to avoid, so it's a signal the launch
+  harness was misconfigured for that job, not a supported steady-state path.
 
 ## Required before any full matrix run (per the decision that triggered this fix)
 
@@ -123,7 +144,7 @@ every judged run, not just this one.
 2. ~~Validate the fix changes real outcomes.~~ Reported done (Phi re-score, 0.8→0.0) — pending
    the backing artifact landing in the repo, see Validation above.
 3. ~~Fix the judge-LLM OOM so fresh (not just re-scored) runs can actually execute.~~ Done —
-   8-bit judge quantization.
+   target/judge GPU split (see above; supersedes the abandoned 8-bit attempt).
 4. **Run FRESH smokes (not re-scores) on all four core conditions**: `ours`-Phi, `gptfuzzer`-Phi,
    `ours`-Qwen, `gptfuzzer`-Qwen, with the fixed judge AND the fixed MCTS reward signal. This is
    the real budget-gate input — re-scores are a floor (early-stopping on old false positives

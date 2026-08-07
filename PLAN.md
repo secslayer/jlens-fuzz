@@ -465,11 +465,22 @@ invalidated (true ASR was 0.0, see the incident doc).
   4 recorded "successes" to failure (`0.8 → 0.0`) — consistent with the hand-read diagnosis, but
   the backing `results/rescore_*.json` hasn't landed in the repo yet, so treat as reported-not-
   yet-artifact-backed per CLAUDE.md rule 2. See the incident doc's Validation section.
-- A **second blocker** surfaced and was fixed: the first live fresh-judge smoke OOM'd (target +
-  judge_llm + diagnostic judge together exceed one T4). Fixed by loading the judge in 8-bit
-  (`scripts/judge.py`, `bitsandbytes`) — judge-only, the target stays fp16 always. Deliberately
-  not fixed by a second GPU (would break `run_parallel.sh`'s per-job GPU pinning and halve
-  throughput for every judged run). See the incident doc for why.
+- A **second blocker** surfaced and needed two attempts to fix: the first live fresh-judge smoke
+  OOM'd (target + judge_llm + diagnostic judge together exceed one T4). First attempt (2026-08-06)
+  was 8-bit judge quantization via `bitsandbytes` — **abandoned 2026-08-07**: unreliable on Kaggle
+  (import/CUDA issues) and it still OOM'd. **Current fix: target and judge on separate GPUs**
+  (`scripts/judge.py`'s `load_judge_llm()`, target stays `cuda:0` fp16 unchanged, judge moves to
+  `cuda:1` fp16, no quantization at all — Kaggle gives 2 T4s per session, use both). Reverses the
+  earlier "don't use a second GPU" guidance in this section — that concern (breaking
+  `run_parallel.sh`'s per-job GPU pinning) was real and is now handled properly instead of
+  avoided: `run_parallel.sh` gained a `JOB=<id>` mode (full 2-GPU visibility, no
+  `CUDA_VISIBLE_DEVICES` restriction) for judged jobs, and `run_controller.py`'s batch packing is
+  now judged/unjudged-aware — `probes*`/`direction*` (the only jobs that never call the judge)
+  still pair up 2-per-notebook via the old `JOB_A=`/`JOB_B=` mode; every other ready job packs 1
+  per notebook via the new `JOB=` mode. **Real throughput tradeoff, not eliminated**: a judged job
+  now occupies both GPUs of its notebook/session, so two judged jobs can no longer share one
+  notebook — they still run concurrently fine across the 2 separate commit notebooks (each has
+  its own 2 T4s), just one judged job per notebook instead of two independent single-GPU jobs.
 
 **Do not run the full 2-target × 3-seed matrix (§10) until**: (1) Qwen's existing completions are
 re-scored with `scripts/rescore_judge.py`, (2) FRESH (not re-scored) smokes run on all four core

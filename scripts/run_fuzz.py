@@ -343,17 +343,23 @@ def generate_completion(model, tok, prompt_text, device, temperature, top_p, max
 
 
 def evaluate_completion(target_model, target_tok, judge_tok, judge_model, judge_llm_tok,
-                         judge_llm_model, behavior, candidate, device, cfg):
+                         judge_llm_model, judge_device, behavior, candidate, device, cfg):
     """Generate + judge ONE candidate: the shared "full query" path for both --fitness judge
     (every iteration) and --fitness judge+act (elite-promoted iterations only). Returns the
     completion, the TRUSTED success verdict (scripts/judge.py -- what `success`/`reward` must
-    use), and the old RoBERTa score kept ONLY as a logged diagnostic."""
+    use), and the old RoBERTa score kept ONLY as a logged diagnostic.
+
+    `device` is the TARGET's device (cuda:0); `judge_device` is the judge LLM's own, separate
+    device (default cuda:1) -- they are different GPUs as of 2026-08-07, see scripts/judge.py.
+    """
     completion = generate_completion(
         target_model, target_tok, candidate, device,
         temperature=cfg["decode_temperature"], top_p=cfg["decode_top_p"],
     )
     _, roberta_score = judge_completion(judge_tok, judge_model, completion, device)
-    verdict = judge_mod.judge_success(behavior, completion, judge_llm_tok, judge_llm_model, device)
+    verdict = judge_mod.judge_success(
+        behavior, completion, judge_llm_tok, judge_llm_model, judge_device
+    )
     return {
         "completion": completion,
         "success": verdict["success"],
@@ -639,7 +645,7 @@ def corpus_self_bleu(texts):
 # ---------------------------------------------------------------------------------------------
 def run_behavior(behavior_idx, behavior, seed_templates, cfg, args, device,
                   target_tok, target_model, mutate_tok, mutate_model,
-                  judge_tok, judge_model, judge_llm_tok, judge_llm_model,
+                  judge_tok, judge_model, judge_llm_tok, judge_llm_model, judge_device,
                   directions, dir_layer_idx,
                   probe_coef, probe_intercept, probe_layer, records, counters):
     """Run the MCTS-lite loop for a single behavior. Mutates `records` (appends) and `counters`
@@ -679,7 +685,7 @@ def run_behavior(behavior_idx, behavior, seed_templates, cfg, args, device,
             t0 = time.perf_counter()
             eval_result = evaluate_completion(
                 target_model, target_tok, judge_tok, judge_model, judge_llm_tok, judge_llm_model,
-                behavior, candidate, device, cfg,
+                judge_device, behavior, candidate, device, cfg,
             )
             completion = eval_result["completion"]
             roberta_score = eval_result["roberta_score"]
@@ -709,7 +715,7 @@ def run_behavior(behavior_idx, behavior, seed_templates, cfg, args, device,
                 t1 = time.perf_counter()
                 eval_result = evaluate_completion(
                     target_model, target_tok, judge_tok, judge_model, judge_llm_tok,
-                    judge_llm_model, behavior, candidate, device, cfg,
+                    judge_llm_model, judge_device, behavior, candidate, device, cfg,
                 )
                 completion = eval_result["completion"]
                 roberta_score = eval_result["roberta_score"]
@@ -886,8 +892,13 @@ def main():
 
     # The TRUSTED judge (scripts/judge.py) -- fixed, small, ungated, distinct from both attack
     # targets. Needed for every real query regardless of method/fitness (gptfuzzer included --
-    # the false-positive problem applies to it too, this is not an "ours"-only fix).
-    judge_llm_tok, judge_llm_model = judge_mod.load_judge_llm(cfg["judge_llm_model"], device)
+    # the false-positive problem applies to it too, this is not an "ours"-only fix). Lives on
+    # its OWN GPU (default cuda:1) -- target/judge VRAM split, see scripts/judge.py. This job
+    # therefore needs BOTH GPUs visible (no per-job CUDA_VISIBLE_DEVICES pinning) -- see
+    # scripts/run_parallel.sh and PLAN.md §11.
+    judge_llm_tok, judge_llm_model, judge_device = judge_mod.load_judge_llm(
+        cfg["judge_llm_model"], cfg.get("judge_device", "cuda:1")
+    )
 
     probes_path, direction_path = derive_target_paths(args.config, args.probes, args.direction)
     target_hidden_size = target_model.config.hidden_size
@@ -965,7 +976,7 @@ def main():
         success, queries_to_success, evaluated_texts = run_behavior(
             behavior_idx, behavior, seed_templates, cfg, args, device,
             target_tok, target_model, mutate_tok, mutate_model,
-            judge_tok, judge_model, judge_llm_tok, judge_llm_model,
+            judge_tok, judge_model, judge_llm_tok, judge_llm_model, judge_device,
             directions, dir_layer_idx,
             probe_coef, probe_intercept, probe_layer, records, counters,
         )

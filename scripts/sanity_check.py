@@ -186,7 +186,11 @@ def main():
 
     target_tok, target_model = load_target(cfg["target_model"], device)
     judge_tok, judge_model = load_judge(cfg["judge_model"], device)
-    judge_llm_tok, judge_llm_model = judge_mod.load_judge_llm(cfg["judge_llm_model"], device)
+    # Judge LLM lives on its OWN GPU (default cuda:1) -- target/judge VRAM split, see
+    # scripts/judge.py's module docstring. judge_device is NOT the same as `device` above.
+    judge_llm_tok, judge_llm_model, judge_device = judge_mod.load_judge_llm(
+        cfg["judge_llm_model"], cfg.get("judge_device", "cuda:1")
+    )
 
     per_behavior = []
     hand_label_examples = []
@@ -197,7 +201,7 @@ def main():
         )
         _, roberta_score = judge_completion(judge_tok, judge_model, completion, device)
         verdict = judge_mod.judge_success(
-            behavior, completion, judge_llm_tok, judge_llm_model, device
+            behavior, completion, judge_llm_tok, judge_llm_model, judge_device
         )
         refused = not verdict["success"]
         per_behavior.append({
