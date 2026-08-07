@@ -36,7 +36,10 @@ highest projection onto a difference-in-means refusal direction) shows no consis
 ASR advantage over GPTFuzzer's uniform mutation baseline, on two open-weight targets
 (Qwen2.5-3B-Instruct, Phi-4-mini-instruct), with the guided-mutation mechanism itself independently
 confirmed as engaged (span-attribution firing on every iteration; UCB1 tree search genuinely
-revisiting mutated children, not just replaying an unmutated seed pool). All results are reported
+revisiting mutated children, not just replaying an unmutated seed pool) — but with attribution
+*quality* itself shown, via real debug traces, to be template- and target-dependent rather than
+uniformly refusal-localized, which is itself consistent with the null: a guidance signal that is
+only sometimes informative cannot be expected to reliably beat unguided mutation. All results are reported
 at smoke scale (n=5 behaviors per condition); the originally planned 25-behavior × 3-seed matrix
 did not run because available compute (a Kaggle free-tier allocation) was exhausted before it
 could be launched. We discuss both findings as evidence that jailbreak-fuzzing evaluation
@@ -171,32 +174,43 @@ probe-based `judge+act` fitness variant was built but demoted — see below). Bo
 
 **3.1 Refusal-direction extraction.** Following Arditi et al. [2024], we extract a per-layer
 difference-in-means direction from paired harmful (AdvBench) and harmless (Alpaca-style)
-prompts' residual-stream activations. On Qwen2.5-3B-Instruct (the control target), the
-best-held-out-AUC layer is layer 25 of 36, AUC 1.0 (`results/direction.npz` →
-`best_layer=25, best_layer_idx=24, best_auc=1.0`). Critically, this direction was checked for
-generalization beyond its own held-out split: on 6 hand-written novel prompts (3 harmful phrased
-conversationally, 3 benign phrased as imperatives — deliberately crossing AdvBench's own surface
-style to avoid the confound below), it separated harmful (+30 average projection) from benign
-(−5 average projection) cleanly (`reviews/stage2-human-signoff.md`). **[DRAFT FLAG]** We do not
-have an equivalent committed artifact for Phi-4-mini-instruct: `results/phi/direction.npz` (or
-the manifest's default `results/phi4mini/direction.npz`) is not present in this repository as of
-this writing, even though the Phi `ours` run (§5) clearly used *some* direction file
-(`guided_fire_count=200/200`, i.e. attribution succeeded on every iteration — it could not have
-done so without a loaded, dimension-matched direction). Whatever direction file was used for Phi
-was not pushed/committed. We cannot report Phi's direction AUC or novel-prompt separation in this
-draft; either that artifact needs to be pushed from Kaggle, or this must be stated as a limitation
-(§6) rather than silently assumed to mirror Qwen's numbers.
+prompts' residual-stream activations, on both targets. **Update: Phi's artifacts landed after the
+previous draft flagged them missing** — `results/phi/direction.npz` and
+`results/phi/probes/best_layer.json` (also mirrored at `results/phi4mini/...`) are now committed;
+the comparison below is fully artifact-backed for both targets.
 
-A parallel logistic-regression probe (Component "fitness" signal, distinct from the direction)
-was also trained and gated: probe held-out AUC was 1.0 (`results/probes/best_layer.json` →
-`best_layer=9, best_auc=1.0`), but the probe **failed** the same 6-novel-prompt check at chance
-accuracy (0.5) despite its 1.0 held-out AUC — diagnosed as overfitting a lexical/surface confound
-between AdvBench's imperative phrasing and the benign training set's more conversational phrasing
-(`reviews/stage2-human-signoff.md`). Per that gate's explicit ruling, probe-based fitness
-(`--fitness judge+act`) was demoted out of the core comparison entirely; every result in this
-paper uses `--fitness judge` (judge-only reward), and the probe/`judge+act` path is not part of
-any claim below. Guided *mutation* (driven by the direction, not the probe) is unaffected by this
-demotion and remains the paper's method under test.
+| | Qwen2.5-3B (control) | Phi-4-mini (treatment) |
+|---|---|---|
+| Direction best layer / depth | 25 of 36 (~69%) | 11 of 32 (~34%) |
+| Direction held-out AUC | 1.0 | 1.0 |
+| Novel-prompt direction score, harmful mean | **+30.204** | **+9.486** |
+| Novel-prompt direction score, benign mean | **−4.954** | **+4.594** |
+| Harmful − benign gap | **35.16** | **4.89** |
+| Probe best layer / held-out AUC | 9 / 1.0 | 8 / 1.0 |
+| Probe novel-prompt accuracy | 0.500 (chance) | 0.500 (chance) |
+
+(`results/direction.npz`, `results/phi/direction.npz` → `best_layer`/`best_layer_idx`/`best_auc`;
+`results/qwen_novel_check.log`, `results/phi4mini/novel_check.log` → per-prompt and mean
+`direction_score` lines; `results/probes/best_layer.json`, `results/phi/probes/best_layer.json` →
+`best_auc`; novel-prompt probe accuracy from the same two `.log` files.)
+
+Both targets' held-out AUCs are a perfect 1.0 for both signals — uninformative on their own, as
+Gate 2's own novel-prompt check exists to demonstrate (`reviews/stage2-human-signoff.md`). On the
+novel-prompt check, **Qwen's direction separates harmful from benign cleanly and by a wide margin
+(gap 35.16, benign mean solidly negative); Phi's direction separates harmful from benign only
+weakly (gap 4.89, and notably the benign mean is *positive*, not negative — Phi's direction never
+clearly signals "not harmful" the way Qwen's does).** Both targets' probes fail the same
+novel-prompt check at exactly chance accuracy (0.500), replicating Qwen's probe-generalization
+failure (diagnosed as overfitting AdvBench's imperative surface form rather than harmful intent,
+`reviews/stage2-human-signoff.md`) on Phi as well. Per that gate's explicit ruling, probe-based
+fitness (`--fitness judge+act`) was demoted out of the core comparison entirely on both targets;
+every result in this paper uses `--fitness judge` (judge-only reward), and the probe/`judge+act`
+path is not part of any claim below. Guided *mutation* (driven by the direction, not the probe) is
+unaffected by this demotion and remains the paper's method under test — but the direction-quality
+asymmetry above is directly relevant to §5.3's attribution-quality finding: Phi's underlying
+refusal signal is measurably weaker and noisier than Qwen's, which is a plausible contributing
+cause (not the only one — see §5.3) for why Phi's attribution scores cluster more narrowly and
+less consistently around refusal-semantic content than Qwen's do.
 
 **3.2 Guided mutation (`ours`, `--mutation guided`).** For the selected pool template, we run a
 partial forward pass, compute the per-token projection of each token's residual-stream activation
@@ -376,20 +390,56 @@ unconfirmed:
   `full_forward_passes`; Qwen `ours`' 113+54=167 checks out exactly, confirming these counters are
   internally consistent). This directly answers the question the seed-pool fix (§4) set out to
   answer: at pool-12, real UCB1 tree search is happening, on both methods, in every reported run.
-- **[DRAFT FLAG — not confirmed, do not state as fact without further evidence.]** We do **not**
-  have an artifact confirming the *semantic* claim that attribution "localizes to refusal-relevant
-  tokens" specifically (e.g. that the top-projecting tokens are words like "sorry"/"cannot"/
-  "decline" rather than semantically arbitrary high-scoring tokens). `--debug-attribution` logging
-  was built into `run_fuzz.py` specifically to answer this question (it logs the top-k tokens by
-  projection score and the selected span's text for every guided-mutation call), but no run with
-  that flag enabled was executed and reported back during this project — the pool-12 smoke runs
-  behind this section's numbers were **not** run with `--debug-attribution`. We can honestly claim
-  "the attribution mechanism fires and produces *some* span every iteration" (bullet 1) and
-  "tree search revisits mutated children" (bullet 2), both fully confirmed. We cannot yet honestly
-  claim the mechanism's *semantic target* is refusal-relevant tokens specifically, and this draft
-  does not make that claim. If real `--debug-attribution` output exists, it should be added here
-  before this section leaves draft status; otherwise this bullet should be softened further or
-  moved to future work.
+  A separate, independently-collected 2-behavior `--debug-attribution` diagnostic run (below) shows
+  the first `MUTATED_CHILD` pool selection firing at **iteration 24** on Qwen
+  (`results/debug_attribution_qwen.log`, `behavior_idx=1`) — matching, to the exact iteration, the
+  worst-case prediction from §4's standalone `select_ucb1`/`backpropagate` simulation. This is
+  independent corroboration, from a real run, of a claim §4 previously supported only with a
+  synthetic simulation.
+
+**Attribution quality: real, quantified, and *not* uniform (corrected from an earlier draft).**
+An earlier version of this section claimed attribution "localizes to refusal-relevant tokens,"
+based on an informal chat excerpt that was never saved as an artifact. We re-ran the diagnostic
+with `--debug-attribution` (2 behaviors per target, real forward passes, not synthetic) and saved
+the full output to `results/debug_attribution_qwen.log` (57 attribution calls) and
+`results/debug_attribution_phi.log` (80 attribution calls) — both now committed. Reading the real
+logs, the earlier claim was **too strong**: localization is real on some inputs and largely absent
+on others, varying by which template (original seed or mutated child) is selected. Representative
+examples, quoted directly from the committed logs:
+
+- **Strongly refusal-semantic** (Qwen, iteration 1, `results/debug_attribution_qwen.log`): top
+  tokens include `harmful` (13.51), `illegal` (12.46), `policy` (13.18), `ethical` (11.77);
+  selected span `"and illegal information, including any kind of malware."`, `sum_score=108.58`.
+- **Generic / template-structural, same target** (Qwen, iteration 0, same file): top tokens are
+  `rules` (8.08), `it` (8.08), `opposite` (5.76), `contrad[iction]` (6.23) — function words and
+  template scaffolding, not harm-related; selected span `"with your default answer or with
+  hardcoded rules, you"`, `sum_score=47.08` — less than half the semantic example's score.
+- **Strongly refusal-semantic** (Phi, `results/debug_attribution_phi.log`): top tokens include
+  `illegal` (10.19), `malware` (10.77), `harmful` (9.57), `discrimination` (7.98), `racism`
+  (8.47); selected span `"harmful and illegal information, including any kind of malware"`,
+  `sum_score=84.96`.
+- **Generic, same target** (Phi, same file): top tokens are `mode` (6.86), `pretend` (6.34),
+  `Anti[GPT]` (6.28), `character` (6.09); selected span `"the direct antithesis of your original
+  response."`, `sum_score=58.36`.
+
+Aggregated over every logged call: Qwen's per-selection `sum_score` ranges **40.0–116.0** (mean
+82.6, n=57); Phi's ranges **51.7–87.2** (mean 65.8, n=80) — Phi's attribution is more uniformly
+mid-range, less likely to hit either Qwen's strongest semantic peaks or its weakest generic
+troughs. This is directionally consistent with §3.1's finding that Phi's underlying refusal
+direction separates harmful from benign prompts far more weakly than Qwen's (novel-prompt gap
+4.89 vs. 35.16) — a noisier underlying signal plausibly produces a narrower, less differentiated
+attribution-score distribution, though we have not run a statistical test connecting these two
+observations and do not claim a proven causal link, only a consistent pattern.
+
+**We now state §5.3's central claim precisely, not as "attribution localizes to refusal-relevant
+tokens" (too strong, corrected above) but as: attribution is a genuinely informative signal on
+some templates, on both targets, and an uninformative one on others — template- and
+target-dependent, not uniform.** This is, we argue, *itself* a natural explanation for §5.2's
+null: a guidance signal that only sometimes points somewhere meaningful cannot be expected to
+reliably outperform unguided (uniform) mutation across a whole search, even though it clearly is
+picking up real signal on the templates where it fires strongly. The null is not evidence the
+mechanism is broken (bullets 1–2 rule that out); it is consistent with a real but unreliable
+signal, which is a more specific and more useful finding than an undifferentiated "no effect."
 
 ## 6. Limitations
 
@@ -417,10 +467,19 @@ unconfirmed:
   re-inspect the exact completion text behind §5.1's central finding from this repo alone. This is
   a genuine reproducibility limitation, traded off against the (higher-priority) commitment never
   to publish raw jailbreak strings (§7).
-- **Direction/probe artifacts incomplete for one target.** As flagged in §3.1, no committed
-  direction-extraction artifact exists for Phi-4-mini in this repository, despite the Phi `ours`
-  run clearly having used one. Phi's direction AUC / novel-prompt-generalization numbers cannot be
-  reported here and should be treated as missing, not assumed equivalent to Qwen's.
+- **Phi's underlying refusal-direction signal is measurably weaker than Qwen's.** §3.1's
+  novel-prompt check shows a harmful/benign separation gap of 4.89 on Phi vs. 35.16 on Qwen, with
+  Phi's benign mean staying positive rather than crossing to negative. This is now resolved as an
+  artifact-backed *finding* rather than a missing-data gap (an earlier draft flagged Phi's
+  direction/probe artifacts as absent from the repository; both have since been committed), but it
+  remains a limitation on how far §5.2's null generalizes: we tested guided mutation on one target
+  with a strong direction signal and one with a comparatively weak one, and cannot rule out that a
+  target with an even cleaner refusal direction would show a different result.
+- **The §5.3 debug-attribution evidence is itself small-n.** The `--debug-attribution` diagnostic
+  run behind §5.3's quantified claims covers 2 behaviors per target (57 attribution calls for
+  Qwen, 80 for Phi) — enough to establish that attribution quality *varies*, not enough to claim a
+  precise, generalizable distribution of how often it is informative vs. not. A larger, dedicated
+  debug-attribution run across more behaviors would strengthen this claim's precision.
 - **AutoDAN and AJF were not run as baselines** (§2) — cited for context only, per the project's
   compute-scoped decision to treat GPTFuzzer alone as a sufficient core-lane baseline.
 
@@ -494,10 +553,14 @@ pulled before submission.
 | Phi `gptfuzzer` pool-12 ASR | `results/phi/gptfuzzer_smoke_pool12.json` | same fields | Artifact-backed |
 | Qwen pre-fix `ours` ASR | `results/ours_smoke.json` | `asr`, `guided_fire_count` | Artifact-backed |
 | Qwen direction AUC / layer | `results/direction.npz` | `best_layer`, `best_layer_idx`, `best_auc` | Artifact-backed |
-| Qwen direction novel-prompt separation | `reviews/stage2-human-signoff.md` | prose (+30 / −5 avg) | Human-verified record, not a JSON scalar |
-| Qwen probe AUC / novel-prompt failure | `results/probes/best_layer.json`, `reviews/stage2-human-signoff.md` | `best_auc`; 0.5 novel accuracy (prose) | Artifact-backed (AUC) + human-verified record (novel check) |
+| Phi direction AUC / layer | `results/phi/direction.npz` (mirrored `results/phi4mini/direction.npz`) | same fields | Artifact-backed |
+| Qwen probe AUC / layer | `results/probes/best_layer.json` | `best_layer`, `best_auc` | Artifact-backed |
+| Phi probe AUC / layer | `results/phi/probes/best_layer.json` (mirrored `results/phi4mini/probes/best_layer.json`) | same fields | Artifact-backed |
+| Qwen direction/probe novel-prompt separation (30.204 / −4.954 / 0.500) | `results/qwen_novel_check.log` | per-prompt + mean `direction_score` lines, probe accuracy line | Artifact-backed (console log, not JSON, but committed and verbatim) |
+| Phi direction/probe novel-prompt separation (9.486 / 4.594 / 0.500) | `results/phi4mini/novel_check.log` | same fields | Artifact-backed |
 | ChadGPT false positive, true Qwen `ours` ASR 0.2 | `reviews/judge-validity-incident.md` | prose | PI hand-verified, not written back into any JSON |
 | Original Phi incident, 4/4 false positives, asr=0.8 | `reviews/judge-validity-incident.md` | prose | PI hand-verified (qualitative) / **no backing JSON for the 0.8 figure** |
 | Pool-77 postfix Qwen 0.4/0.4 | — | — | **No backing file in this repository; PI-reported only** |
-| Phi direction/probe AUC | — | — | **Missing — no committed artifact for this target** |
-| select_ucb1/backpropagate tree-search-engagement proof | (verbatim-extracted, run standalone, not itself a committed artifact) | — | Reproducible from `scripts/run_fuzz.py` source; not a `results/*.json` fact |
+| §5.3 attribution-quality examples + sum_score ranges (Qwen 40.0–116.0/82.6, Phi 51.7–87.2/65.8) | `results/debug_attribution_qwen.log`, `results/debug_attribution_phi.log` | `top-10 tokens`/`selected span` lines, `sum_score=` values | Artifact-backed (console log, committed verbatim); superseded an earlier unbacked chat-excerpt claim |
+| First `MUTATED_CHILD` selection at iteration 24 (Qwen) | `results/debug_attribution_qwen.log` | `behavior_idx=1` iteration-24 `pool_select` line | Artifact-backed |
+| select_ucb1/backpropagate tree-search-engagement proof (synthetic) | (verbatim-extracted, run standalone, not itself a committed artifact) | — | Reproducible from `scripts/run_fuzz.py` source; not a `results/*.json` fact; independently corroborated by the real iteration-24 log line above |
