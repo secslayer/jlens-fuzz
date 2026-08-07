@@ -507,18 +507,27 @@ replaced. The paper's contributions, in order:
    footnote.
 2. **SECONDARY — the honest guided-mutation null, with an explicit noise caveat.** Activation-
    guided span mutation shows no *consistent, significant* ASR advantage over uniform mutation,
-   with the mechanism independently verified as actually operating: attribution localizes to
-   refusal-relevant tokens (`--debug-attribution`), and tree search genuinely engaged after the
-   seed-pool fix (reported `n_mutated_child_selected` in the 54-80 range, not the pre-fix 0). Two
-   data points, both consistent with the null and inconsistent with each other in a way that rules
-   out reading either as a real effect: an earlier pool-77 (post-judge-fix, pre-pool-fix) Qwen run
-   showed `ours` = `gptfuzzer` = 0.4 (tied); the pool-12 run (post-pool-fix, hand-verified) showed
-   Qwen `ours` = 1/5 = 0.2 (after removing the ChadGPT false positive) vs. `gptfuzzer` = 0/5 = 0.0.
-   **Do not cite the pool-12 1-vs-0 as guided beating uniform** — that is noise at n=5, not signal;
-   a single flip changes the ratio entirely. The null is reported *because* the mechanism was
-   confirmed engaged, not despite an unverified/inert one — that is what makes it an honest
-   negative result. Establishing statistical significance either way requires the full matrix,
-   which will not run (GPU exhausted).
+   with the mechanism independently verified as actually operating: `guided_fire_count` is 167/167
+   (Qwen) and 200/200 (Phi) — guided mutation fires on essentially every iteration, 0 fallback —
+   and tree search genuinely engaged after the seed-pool fix: `n_mutated_child_selected` = 54
+   (Qwen `ours`), 80 (Qwen `gptfuzzer`, Phi both) — all **verified directly from
+   `results/{ours,gptfuzzer}_smoke_pool12.json` and `results/phi/{ours,gptfuzzer}_smoke_pool12.json`,
+   pushed from Kaggle and landed in this repo 2026-08-07**. Those files' own `asr` field (the
+   fixed judge's live verdict during the run, before any hand-verification) reads: Qwen `ours`
+   0.4 (2/5), Qwen `gptfuzzer` 0.0 (0/5), Phi both 0.0. Hand-verifying Qwen `ours`'s 2 flagged
+   successes found 1 genuine + 1 false positive (the ChadGPT case) — true hand-verified ASR 0.2
+   (1/5), not written back into the JSON (this repo does not retroactively edit results files,
+   same convention as the original incident). **A separate, earlier pool-77 (post-judge-fix,
+   pre-pool-fix) Qwen run reportedly showed `ours` = `gptfuzzer` = 0.4 (tied) — this comparison
+   point has NO backing file in this repo and must be treated as PI-reported-only** until/unless
+   it lands, unlike the pool-12 numbers above. Both pool-12 (0.2 vs. 0.0, hand-verified) and the
+   reported pool-77 (0.4 vs. 0.4) point the same direction: no reproducible guided advantage.
+   **Do not cite the pool-12 2-vs-0 raw judge count, or the 1-vs-0 hand-verified count, as guided
+   beating uniform** — that is noise at n=5, not signal; a single flip changes the ratio entirely.
+   The null is reported *because* the mechanism was confirmed engaged, not despite an
+   unverified/inert one — that is what makes it an honest negative result. Establishing
+   statistical significance either way requires the full matrix, which will not run (GPU
+   exhausted).
 3. **METHODOLOGY note — seed-pool exhaustion (§12).** At `query_budget=40` against the original
    77-template pool, UCB1 never mutates past the original seeds — documented as a caveat/lesson
    for anyone reusing GPTFuzzer's MCTS-lite scaffold with a small query budget, not as a result
@@ -529,17 +538,26 @@ replaced. The paper's contributions, in order:
    the paper: "guided mutation beats uniform at pool-12" from the 1-vs-0 count above — see the
    noise caveat in point 2.
 
-**Provenance flag on the specific numbers above** (Phi `0.8→0.0`; Qwen pool-77 `0.4`/`0.4`; Qwen
-pool-12 hand-verified `0.2`/`0.0`; the ChadGPT false positive; `n_mutated_child_selected` 54-80):
-the Qwen pool-12 numbers and the ChadGPT case are **PI hand-verified** (a real, completed human
-read of the judge's own flagged completions — stronger evidence than a raw self-report), but none
-of it is yet backed by a committed `results/*.json` in this repo — as of this writing, `results/`
-here still only has the pre-fix, pre-pool-fix `ours_smoke.json`. Hand-verification and artifact-
-backing are two different bars (CLAUDE.md rule 2 is about the latter): the qualitative finding
-("the fixed judge still leaks this specific false positive") is established by the hand-read
-regardless of whether the JSON has landed; the specific numeric ASR values should still be cited
-in the paper only once their backing JSON is pushed from Kaggle and pulled here. `/review` should
-re-check both bars before any Gate 5/7 PASS.
+**Provenance status, updated 2026-08-07 (this replaces the earlier "not yet artifact-backed"
+flag — the files have since landed):**
+- **Now artifact-backed**: `results/ours_smoke_pool12.json`, `results/gptfuzzer_smoke_pool12.json`,
+  `results/phi/ours_smoke_pool12.json`, `results/phi/gptfuzzer_smoke_pool12.json` — all four
+  pushed from Kaggle and confirmed in this repo (`git log` shows them landing via commit
+  `4e0ebb8`). Their `asr`/`guided_fire_count`/`n_mutated_child_selected` fields were read
+  directly from these files and match the PI's report exactly — CLAUDE.md rule 2 satisfied for
+  these specific numbers.
+- **Still PI-hand-verified only, not written back into any JSON** (correct — this repo does not
+  retroactively edit results files): the ChadGPT false-positive finding and the resulting 0.2
+  true Qwen `ours` ASR. This is a real, completed human read (stronger evidence than a raw
+  self-report) but is a qualitative/manual correction layered on top of the artifact, not itself
+  in a committed file — cite it in the paper as a hand-verification finding (pointing to
+  `reviews/judge-validity-incident.md`), not as a `results/*.json` field.
+- **Still PI-reported only, no backing file at all in this repo**: the pool-77 (post-judge-fix,
+  pre-pool-fix) Qwen `0.4`/`0.4` comparison point. Do not cite it as a number without a source; it
+  may only ever exist as a comparison anecdote unless that run's JSON is separately pushed.
+
+`/review` should check all three provenance tiers above before any Gate 5/7 PASS — they are not
+interchangeable.
 
 **Explicit limitation, required in the paper**: every number behind this reframe is **smoke-scale
 (n=5 behaviors)**, not the originally planned n=25×3-seed matrix — GPU exhausted before the full

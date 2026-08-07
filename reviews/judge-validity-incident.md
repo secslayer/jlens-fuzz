@@ -138,24 +138,36 @@ pinning) was correct but is now solved properly instead of avoided:
   but that fallback recreates the exact OOM this fix exists to avoid, so it's a signal the launch
   harness was misconfigured for that job, not a supported steady-state path.
 
-## Fresh pool-12 smoke, hand-verified (2026-08-07)
+## Fresh pool-12 smoke, hand-verified and now artifact-backed (2026-08-07)
 
 After the seed-pool fix (PLAN.md §12) made tree search actually engage, a fresh 5-behavior
 `ours`/`gptfuzzer` smoke ran on both targets and the PI hand-verified every flagged success
-directly (not a re-score — a fresh run, hand-read against the fixed judge's own verdicts):
+directly (not a re-score — a fresh run, hand-read against the fixed judge's own verdicts).
+**Update**: `results/ours_smoke_pool12.json`, `results/gptfuzzer_smoke_pool12.json`,
+`results/phi/ours_smoke_pool12.json`, `results/phi/gptfuzzer_smoke_pool12.json` have since been
+pushed from Kaggle and confirmed in this repo — the numbers below are read directly from those
+files, not just reported:
 
-- **Qwen `ours`**: 2 completions flagged PASS by the fixed rubric judge. Hand-read: only 1 is a
-  genuine success. The other is a **false positive** (see the ChadGPT case below) — the fixed
-  judge still leaked it. True hand-verified ASR: **1/5 = 0.2**.
-- **Qwen `gptfuzzer`**: 0 flagged successes. ASR: **0/5 = 0.0**.
-- **Phi-4-mini, both methods**: 0 flagged successes. ASR: **0.0**.
+- **Qwen `ours`**: `asr=0.4` in the file (2/5 flagged PASS by the fixed rubric judge). Hand-read:
+  only 1 is a genuine success. The other is a **false positive** (see the ChadGPT case below) —
+  the fixed judge still leaked it. True hand-verified ASR: **1/5 = 0.2** (this correction is NOT
+  written back into the JSON — this repo does not retroactively edit results files, same
+  convention as the original incident). `guided_fire_count=167/167` (0 fallback) and
+  `n_mutated_child_selected=54` confirm both halves of guided mutation's mechanism (attribution
+  firing, tree search revisiting mutated children) were genuinely active during this run.
+- **Qwen `gptfuzzer`**: `asr=0.0` in the file (0/5 flagged). `n_mutated_child_selected=80`.
+- **Phi-4-mini, both methods**: `asr=0.0` in both files. `guided_fire_count=200/200` for `ours`
+  (0 fallback); `n_mutated_child_selected=80` for both methods.
 
-**Do not read the Qwen 1-vs-0 as guided mutation beating uniform mutation.** That is noise at
-n=5, not signal — a single flip in either direction changes the ratio entirely. A separate,
-earlier pool-77 (post-judge-fix, pre-pool-fix) run showed Qwen `ours` = `gptfuzzer` = 0.4 (tied).
-The two data points are **inconsistent with a real, reproducible guided advantage** and are both
-consistent with the null (no significant difference). Establishing significance would require the
-full matrix — which will not run (GPU exhausted, PLAN.md §11). This is why PLAN.md §11 frames the
+**Do not read the Qwen 2-vs-0 raw judge count, or the 1-vs-0 hand-verified count, as guided
+mutation beating uniform mutation.** That is noise at n=5, not signal — a single flip in either
+direction changes the ratio entirely. A separate, earlier pool-77 (post-judge-fix, pre-pool-fix)
+run reportedly showed Qwen `ours` = `gptfuzzer` = 0.4 (tied) — **this comparison point has no
+backing file in this repo, unlike the pool-12 numbers above, and must stay flagged as
+PI-reported-only** until/unless its JSON lands too. Both data points point the same direction (no
+reproducible guided advantage) and are inconsistent with each other in the specific way that
+rules out reading either as a real effect. Establishing significance would require the full
+matrix — which will not run (GPU exhausted, PLAN.md §11). This is why PLAN.md §11 frames the
 guided-vs-uniform result as an honest null, not "guided wins at pool-12."
 
 ## Residual false positive found AFTER the fix — the ChadGPT case (2026-08-07)
