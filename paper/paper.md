@@ -32,7 +32,7 @@ zero harmful content. Judge unreliability on persona-wrapper completions is not 
 classifier architecture; it is a more general problem that a plausible, deliberately-designed fix
 did not fully close. As a secondary result, using the corrected judge and a fixed fitness signal,
 we report an honest null: activation-guided span mutation (mutating the template span with the
-highest projection onto a difference-in-means refusal direction) shows no consistent, significant
+highest projection onto a difference-in-means refusal direction) shows no consistent, reliable
 ASR advantage over GPTFuzzer's uniform mutation baseline, on two open-weight targets
 (Qwen2.5-3B-Instruct, Phi-4-mini-instruct), with the guided-mutation mechanism itself independently
 confirmed as engaged (span-attribution firing on every iteration; UCB1 tree search genuinely
@@ -76,8 +76,10 @@ classifier.
 
 Our secondary contribution is an honest null result. Using the corrected judge, and with the
 guided-mutation mechanism independently confirmed to be operating as designed (§5.2–5.3),
-activation-guided mutation shows no consistent, significant ASR advantage over uniform mutation
-on either target we tested. We report this as a negative result specifically *because* we can
+activation-guided mutation shows no consistent, reliable ASR advantage over uniform mutation
+on either target we tested (§5.2 — we ran no formal significance test at this sample size; "no
+advantage" here means the raw counts do not consistently favor either method, not a statistically
+established equivalence). We report this as a negative result specifically *because* we can
 rule out "the mechanism never engaged" as the explanation — the null is informative, not an
 artifact of guided mutation quietly falling back to uniform mutation under the hood.
 
