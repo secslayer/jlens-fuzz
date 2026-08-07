@@ -482,24 +482,53 @@ invalidated (true ASR was 0.0, see the incident doc).
   notebook — they still run concurrently fine across the 2 separate commit notebooks (each has
   its own 2 T4s), just one judged job per notebook instead of two independent single-GPU jobs.
 
-**Do not run the full 2-target × 3-seed matrix (§10) until**: (1) Qwen's existing completions are
-re-scored with `scripts/rescore_judge.py`, (2) FRESH (not re-scored) smokes run on all four core
-conditions — `ours`-Phi, `gptfuzzer`-Phi, `ours`-Qwen, `gptfuzzer`-Qwen — with the fixed judge and
-fixed MCTS reward, (3) all of the above are reviewed. Re-scores are a floor, not a substitute for
-fresh runs: early-stopping on an old false positive means a fresh run may explore further and
-find real jailbreaks the old run never reached. This gate applies on top of, not instead of,
-§10's sequencing (Qwen core lane complete and reviewed) and Gate 5's existing 👤 hand-validation
-requirement (now explicitly noted to apply at every scale, not just the 50-behavior full run).
+**Full 2-target × 3-seed matrix (§10): ABANDONED, not deferred (2026-08-07).** It was gated on
+(1) Qwen's existing completions re-scored, (2) fresh smokes on all four core conditions with the
+fixed judge/MCTS reward, (3) review of both — steps (1)-(2) happened at smoke scale (see the
+DECIDED reframe below); the full n=25×3-seed matrix itself will not run: **GPU budget is
+exhausted**. This is a hard stop, not a scheduling choice — the matrix existed to give a positive
+guided-vs-uniform result statistical power, and the result came back null (below), so there is
+nothing left to power up.
 
-**Possible reframe, prepared for but not yet decided:** if `ours` (guided mutation) does not beat
-`gptfuzzer` (uniform mutation) on these honest, fresh, post-fix numbers, this judge-reliability
-finding itself becomes a candidate **core contribution** for the paper, not just an incident
-footnote — a demonstrated, reproducible measurement-validity failure in a judge the field
-currently treats as a standard evaluation tool is a real result on its own, independent of
-whether the guided-mutation headline holds up. Do not treat the target-difficulty axis (§10) or
-the guided-vs-uniform ablation as the only possible paper narrative; keep
-`reviews/judge-validity-incident.md` written at paper-evidence quality (it currently is) in case
-it needs to become a section rather than a footnote.
+**DECIDED reframe (2026-08-07)** — supersedes the "possible reframe, not yet decided" text this
+replaced. The paper's contributions, in order:
+
+1. **PRIMARY — the judge-reliability finding.** The standard GPTFuzz RoBERTa judge
+   (`hubert233/GPTFuzz`) inflates ASR roughly 2× via template-echo false positives — it rewards
+   jailbreak-**shaped** vocabulary (DAN/Omega/APOPHIS persona declarations), not actual harm.
+   Reported deltas: Phi `0.8 → 0.0`, Qwen `1.0 → 0.4` after the fixed judge (§ above). This is a
+   measurement-validity failure in a tool the field treats as standard, and correcting it changes
+   the conclusion you'd draw from the pipeline. This is the paper's headline result now, not an
+   incident footnote.
+2. **SECONDARY — the honest guided-mutation null.** Activation-guided span mutation shows no ASR
+   advantage over uniform mutation, with the mechanism independently verified as actually
+   operating: attribution localizes to refusal-relevant tokens (`--debug-attribution`), and tree
+   search genuinely engaged after the seed-pool fix (reported `n_mutated_child_selected` in the
+   54-80 range across runs, not the pre-fix 0). The null is reported *because* the mechanism was
+   confirmed to be doing its job, not despite an unverified/inert one — that is what makes it an
+   honest negative result worth publishing rather than a "the guided path never fired" artifact.
+3. **METHODOLOGY note — seed-pool exhaustion (§12).** At `query_budget=40` against the original
+   77-template pool, UCB1 never mutates past the original seeds — documented as a caveat/lesson
+   for anyone reusing GPTFuzzer's MCTS-lite scaffold with a small query budget, not as a result
+   in itself.
+4. **NOT the paper:** "guided mutation beats baselines." That hypothesis was tested (mechanism
+   verified as engaged, both the attribution and the tree-search halves) and falsified — do not
+   frame §10's target-difficulty axis or the guided-vs-uniform ablation as the headline.
+
+**Provenance flag on the specific numbers above** (Phi `0.0→0.8`, Qwen `1.0→0.4`,
+`n_mutated_child_selected` 54-80): reported by the PI from the pool-12 smoke runs, consistent with
+CLAUDE.md rule 2's standard applied everywhere else in this doc — treat as reported-not-yet-
+artifact-backed until the backing `results/*.json` files are pushed from Kaggle and land in this
+repo (as of this writing, `results/` in the repo still only has the pre-fix, pre-pool-fix
+`ours_smoke.json` — none of the post-fix smoke files are here yet). Cite these numbers in the
+paper draft only once their JSON lands; `/review` should re-check this before any Gate 5/7 PASS.
+
+**Explicit limitation, required in the paper**: every number behind this reframe is **smoke-scale
+(n=5 behaviors)**, not the originally planned n=25×3-seed matrix — GPU exhausted before the full
+matrix could run. State this as a limitation, not a footnote: effect sizes and the judge-inflation
+delta should be reported with the sample size attached, and the paper should not imply matrix-scale
+statistical power it does not have. `reviews/judge-validity-incident.md` should be brought to
+paper-evidence quality (finding 1's primary source) as part of Day 7 writing.
 
 ## 12. UCB1 seed-pool exhaustion within budget (found via --debug-attribution, 2026-08-07)
 
