@@ -22,6 +22,7 @@ n_behaviors: 25             # kept in sync with the locked core (was 50)
 smoke_behaviors: 5
 
 human_seed_templates: "https://raw.githubusercontent.com/sherdencooper/GPTFuzz/master/datasets/prompts/GPTFuzzer.csv"
+seed_pool_size: 12   # locked 2026-08-07, PLAN.md §12 -- must match configs/exp.yaml exactly
 
 query_budget: 40            # kept in sync with the locked core (was 50)
 max_iterations: 100

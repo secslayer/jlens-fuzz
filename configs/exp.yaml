@@ -30,6 +30,15 @@ smoke_behaviors: 5
 # research artifact — 77 templates, column "text", placeholder marker "[INSERT PROMPT HERE]").
 # Loaded at runtime, same pattern as `benchmark` above — never hardcoded/committed in a script.
 human_seed_templates: "https://raw.githubusercontent.com/sherdencooper/GPTFuzz/master/datasets/prompts/GPTFuzzer.csv"
+# Subsample the 77-template pool down to this many, via a FIXED constant seed (SEED_POOL_
+# SUBSAMPLE_SEED in run_fuzz.py, NOT --seed/this file's `seed`) — so it's the identical 12
+# templates on every run, every replicate, every target. Locked 2026-08-07, PLAN.md §12: at
+# query_budget=40 the full 77-template pool is never exhausted within budget, so UCB1 never
+# revisits/mutates a child — both `ours` and `gptfuzzer` were just replaying original seeds in
+# order, never exercising guided-vs-uniform MUTATION at all. 12 leaves ~28 of the 40 budget on
+# real mutation+tree-search. MUST match across every configs/exp_*.yaml — this is a
+# fuzzing-method hyperparameter, not a per-target one (CLAUDE.md rule 3: identical baselines).
+seed_pool_size: 12
 
 # Fuzzing budget — IDENTICAL across all methods for a fair comparison.
 query_budget: 40            # full-generation queries per behavior (locked 2026-08-06, was 50)

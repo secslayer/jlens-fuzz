@@ -536,7 +536,43 @@ across behaviors is only the **span-selection step** on the shared, pre-injectio
 implied by "MCTS-lite" is not actually exercised within this budget for `human` seedtier — both
 `ours` and `gptfuzzer` share the identical `select_ucb1`/pool code path, so this does not bias the
 guided-vs-uniform comparison, but it does mean neither condition is doing real tree search at
-`query_budget=40` against a 77-template pool. Worth a one-line limitation in the paper's method
-section either way. Not treated as blocking the matrix — raising `query_budget` past 77 or
-subsampling the seed pool are both real fixes but each has its own cost/tradeoff (GPU-hours vs.
-reduced seed diversity); flagging here rather than deciding unilaterally.
+`query_budget=40` against a 77-template pool. More importantly: **the `ours`-vs-`gptfuzzer` null
+result reported so far may not have actually tested guided-vs-uniform MUTATION at all** — if the
+loop never leaves the "replay original seeds" phase, both conditions are doing the same thing
+(mutating a never-before-mutated seed once) and a null result there says nothing about whether
+guided span-selection helps once real mutation/revisit search is happening.
+
+**Fix, shipped 2026-08-07 (Option 2 — subsample the seed pool, not raise the budget)**: new config
+key `seed_pool_size` (default 12 in code, set to `12` in every `configs/exp_*.yaml`, all four kept
+in sync per CLAUDE.md rule 3) makes `load_seed_templates("human", ...)` subsample the 77-template
+pool down to 12 before returning it. The subsample uses a **fixed constant**
+(`SEED_POOL_SUBSAMPLE_SEED = 0` in `run_fuzz.py`, deliberately NOT `--seed`/`cfg['seed']`) so it is
+the *exact same* 12 templates for every run — all 3 `--seed` replicates, both methods, every
+target — rather than a different subsample per replicate. With 12 seeds and `query_budget=40`,
+~12 iterations exhaust the pool and the remaining ~28 are spent on UCB1 actually selecting and
+refining `MUTATED_CHILD` nodes.
+
+**Proof this actually engages tree search, verified (not asserted)**: extracted `select_ucb1()`
+and `backpropagate()` **verbatim** from `run_fuzz.py` (not reimplemented) and ran them standalone
+against a synthetic pool/reward loop matching the real code's structure:
+- Old pool (77 templates), budget 40: **0/40 `MUTATED_CHILD` selections** — matches the finding
+  above exactly.
+- New pool (12 templates via `seed_pool_size`), budget 40, **worst-case reward always 0** (no
+  success signal at all — the hardest case, since UCB1 has nothing but the explore term to work
+  with): **16/40 `MUTATED_CHILD` selections**, first one at iteration 24. A more realistic sparse
+  reward (occasional success) gave the identical count. So even in the worst case, guided/uniform
+  mutation now gets exercised on real revisited, previously-mutated candidates for a large minority
+  of the budget — the fix works.
+
+**Instrumentation added** (`run_fuzz.py`, both methods since `select_ucb1`/pool code is shared):
+every iteration now classifies its UCB1 selection as `ORIGINAL_SEED` or `MUTATED_CHILD` and
+increments `counters["n_original_selected"]`/`["n_mutated_child_selected"]` **unconditionally**
+(not gated behind `--debug-attribution`) — these are committed to every run's aggregate
+`results/*.json`, same pattern as `guided_fire_count`/`guided_fallback_count`, so this is an
+auditable artifact fact, not a transient log line. `--debug-attribution` additionally logs the
+per-iteration kind (plus `visits_before`/`pool_size`) when set, for interactive debugging.
+
+**Required before trusting any post-fix `ours`-vs-`gptfuzzer` comparison**: check the *real* run's
+`n_mutated_child_selected` in its `results/*.json` is meaningfully > 0 (not just the synthetic
+proof above) before treating that run's ASR difference as evidence about guided-vs-uniform
+mutation specifically, rather than about "which seed template a fixed march happened to land on."

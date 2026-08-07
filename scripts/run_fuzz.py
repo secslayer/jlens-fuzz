@@ -65,6 +65,10 @@ MARKER = "[INSERT PROMPT HERE]"
 UCB_C = 1.0
 MUTATE_WINDOW_TOKENS = 10
 PROBE_ELITE_THRESHOLD = 0.5
+# Fixed (not args.seed) so cfg['seed_pool_size']'s subsample of the human seed pool is identical
+# across every run -- all --seed replicates, both methods, every target. See PLAN.md §12 /
+# load_seed_templates() docstring.
+SEED_POOL_SUBSAMPLE_SEED = 0
 
 # Explicitly-benign wrapper phrases -- zero jailbreak framing, this IS the "random innocuous
 # seeds" null-hypothesis condition (RQ2 tier c). Safe to hardcode.
@@ -252,11 +256,32 @@ def fill_template(template, behavior):
 
 
 def load_seed_templates(seedtier, cfg, tok, model, device):
-    """Return the initial pool of templates for the given seed tier (Component 1 / RQ2)."""
+    """Return the initial pool of templates for the given seed tier (Component 1 / RQ2).
+
+    The human tier is subsampled to cfg['seed_pool_size'] (default 12, PLAN.md §12): the full
+    77-template GPTFuzzer.csv pool exceeds query_budget=40, so UCB1 never exhausts the original
+    seeds within budget and the tree-search/mutation phase never engages -- both `ours` and
+    `gptfuzzer` end up just replaying original seeds in list order the entire run, which does not
+    exercise guided-vs-uniform MUTATION at all. Subsampling to a pool smaller than the budget
+    makes the budget reach real mutation+revisit search (~12 iterations exhaust the seeds, the
+    remaining ~28 do real UCB1 revisiting of mutated children).
+
+    The subsample uses a FIXED constant seed (SEED_POOL_SUBSAMPLE_SEED, not args.seed/cfg['seed'])
+    so it is the exact same 12 templates for every run -- all 3 --seed replicates, both methods,
+    every target -- rather than varying per replicate. Reproducibility here means "everyone who
+    runs this config gets the identical subsample," not "each seed replicate gets its own fixed
+    subsample."
+    """
     if seedtier == "human":
         df = pd.read_csv(cfg["human_seed_templates"])
         templates = df["text"].tolist()
         log.info(f"loaded {len(templates)} human seed templates from {cfg['human_seed_templates']}")
+        pool_size = cfg.get("seed_pool_size", 12)
+        if pool_size is not None and pool_size < len(templates):
+            templates = random.Random(SEED_POOL_SUBSAMPLE_SEED).sample(templates, k=pool_size)
+            log.info(f"subsampled to {len(templates)} human seed templates "
+                     f"(seed_pool_size={pool_size}, fixed subsample_seed="
+                     f"{SEED_POOL_SUBSAMPLE_SEED}) -- PLAN.md §12")
         return templates
     elif seedtier == "random":
         log.info(f"using {len(RANDOM_SEED_TEMPLATES)} hardcoded random innocuous wrapper templates")
@@ -700,6 +725,24 @@ def run_behavior(behavior_idx, behavior, seed_templates, cfg, args, device,
         selected_idx = select_ucb1(pool)
         parent_template = pool[selected_idx]["template"]
 
+        # UCB1 pool-selection kind, counted UNCONDITIONALLY (PLAN.md §12) -- this is the actual
+        # proof, landed in the aggregate results JSON, that tree-search/mutation revisiting
+        # engages within query_budget rather than the loop only ever replaying never-mutated
+        # original seeds. Applies to BOTH methods -- select_ucb1/pool code is shared.
+        selected_node = pool[selected_idx]
+        if selected_node["parent_idx"] is None:
+            counters["n_original_selected"] += 1
+            selected_kind = "ORIGINAL_SEED"
+        else:
+            counters["n_mutated_child_selected"] += 1
+            selected_kind = "MUTATED_CHILD"
+        if args.debug_attribution:
+            log.info(
+                f"[attribution-debug behavior_idx={behavior_idx} behavior_text={behavior!r}] "
+                f"iteration={iteration} pool_select idx={selected_idx} kind={selected_kind} "
+                f"visits_before={selected_node['visits']} pool_size={len(pool)}"
+            )
+
         if args.method == "gptfuzzer" or args.mutation == "uniform":
             child_template = mutate_uniform(parent_template, mutate_tok, mutate_model, device, cfg)
         else:
@@ -861,11 +904,14 @@ def main():
                           "3-seeds-per-condition rigor requirement) without needing a separate "
                           "config file per seed. Defaults to cfg['seed'] when not given.")
     ap.add_argument("--debug-attribution", action="store_true",
-                     help="log, for every guided-mutation call: the top-k tokens by raw "
-                          "projection score onto the refusal direction, and the selected span's "
-                          "token indices/per-token scores/text. Diagnostic only -- for verifying "
-                          "guided mutation picks meaningful, varied spans, not always token 0 or "
-                          "noise. No effect when --mutation uniform or --method gptfuzzer.")
+                     help="log two things per iteration, diagnostic only: (1) UCB1 pool "
+                          "selection -- ORIGINAL_SEED vs. MUTATED_CHILD, applies to ALL methods "
+                          "(shared select_ucb1/pool code path), for verifying tree-search "
+                          "actually engages rather than only replaying original seeds; (2) for "
+                          "guided mutation specifically (--method ours --mutation guided only): "
+                          "top-k tokens by projection score onto the refusal direction and the "
+                          "selected span's token indices/scores/text, for verifying guided "
+                          "mutation picks meaningful, varied spans, not always token 0 or noise.")
     ap.add_argument("--n-behaviors", type=int, default=None,
                      help="override cfg['smoke_behaviors']/cfg['n_behaviors'] with an exact "
                           "count -- for cheap ad-hoc diagnostic runs (e.g. --debug-attribution) "
@@ -1012,6 +1058,13 @@ def main():
         # count == the total number of mutate_guided() calls in the run.
         "guided_fire_count": 0,
         "guided_fallback_count": 0,
+        # UCB1 pool-selection kind (PLAN.md §12) -- unconditional, not gated behind
+        # --debug-attribution, since this is the counted proof (not just a log line) that
+        # tree-search/mutation revisiting actually engages within query_budget rather than the
+        # loop only ever replaying original, never-mutated seed templates. Applies to BOTH
+        # methods (select_ucb1/pool code is shared by ours and gptfuzzer).
+        "n_original_selected": 0,
+        "n_mutated_child_selected": 0,
     }
     records = []  # in-memory, full text -- goes ONLY to the gitignored side file
     per_behavior_queries = []
@@ -1021,7 +1074,11 @@ def main():
 
     run_start = time.perf_counter()
     for behavior_idx, behavior in enumerate(behaviors):
-        # Fresh seed pool PER BEHAVIOR -- no cross-behavior template leakage.
+        # Fresh seed pool PER BEHAVIOR -- no cross-behavior template leakage (a behavior never
+        # inherits another behavior's MUTATED children). The unmutated seed set itself is, by
+        # design, identical across EVERY behavior/run/seed-replicate (fixed subsample, see
+        # load_seed_templates docstring / PLAN.md §12) -- that's the documented, expected source
+        # of the identical early-iteration attribution traces, not a leak.
         seed_templates = load_seed_templates(args.seedtier, cfg, mutate_tok, mutate_model, device)
 
         success, queries_to_success, evaluated_texts = run_behavior(
@@ -1129,6 +1186,13 @@ def main():
         # transient Kaggle log). Both stay 0 for non-guided runs (gptfuzzer, --mutation uniform).
         "guided_fire_count": counters["guided_fire_count"],
         "guided_fallback_count": counters["guided_fallback_count"],
+        # UCB1 pool-selection kind, committed for the same reason as guided_fire_count above
+        # (PLAN.md §12): proof that mutation/tree-search revisiting of MUTATED_CHILD nodes
+        # actually happened within query_budget, not just replay of never-mutated ORIGINAL_SEED
+        # nodes. n_original_selected + n_mutated_child_selected == total iterations run across
+        # all behaviors. Applies to both methods (gptfuzzer and ours share select_ucb1/pool).
+        "n_original_selected": counters["n_original_selected"],
+        "n_mutated_child_selected": counters["n_mutated_child_selected"],
         "full_records_file": full_records_file,
         "_provenance": provenance,
     }
@@ -1139,7 +1203,9 @@ def main():
              f"full_forward_passes={counters['full_forward_passes']} "
              f"partial_forward_passes={counters['partial_forward_passes']} "
              f"guided_fire_count={counters['guided_fire_count']} "
-             f"guided_fallback_count={counters['guided_fallback_count']}")
+             f"guided_fallback_count={counters['guided_fallback_count']} "
+             f"n_original_selected={counters['n_original_selected']} "
+             f"n_mutated_child_selected={counters['n_mutated_child_selected']}")
 
 
 if __name__ == "__main__":
