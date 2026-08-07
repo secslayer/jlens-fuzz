@@ -527,6 +527,31 @@ targeting AdvBench behaviors, some of which concern self-harm and other sensitiv
   particular given the transfer-target design (§4) — this has not yet occurred as of this draft
   and should be completed, and the outcome documented here, before submission.
 
+## 8. Conclusion
+
+Two findings, both artifact-backed. First, judge reliability in jailbreak fuzzing is a persistent,
+cross-architecture problem, not a quirk of one classifier: the original RoBERTa judge inflated
+success via template-echo false positives, and a deliberately stricter, anti-roleplay LLM-as-judge
+rubric — built specifically to catch that failure mode — still leaked a persona-wrapper false
+positive (the ChadGPT case, §5.1). Second, activation-guided span mutation shows no consistent,
+reliable ASR advantage over uniform mutation on either target tested (§5.2), and this null comes
+with a mechanistic explanation rather than standing unexamined: the token-attribution signal
+driving guided mutation is only sometimes informative, and its reliability tracks the underlying
+refusal direction's own separation quality — Qwen's direction separates novel harmful from benign
+prompts by a 35.16-point gap, Phi's by only 4.89 (§3.1), and Phi's weaker signal corresponds to a
+narrower, less differentiated attribution-score distribution during search (§5.3).
+
+We frame both as contributions, not failures. A cautionary measurement result — a widely-reused
+judge fooling even its own deliberate fix — is directly useful to a field that often treats ASR as
+a solved metric. An honest, mechanistically-grounded negative result is more informative than an
+unexamined positive one, and more informative still than a null whose mechanism was never checked.
+
+The practical takeaway: activation-guided jailbreak attacks should be evaluated against verified,
+adversarially-checked judges, and are only as promising as the separation quality of the
+interpretability signal steering them — a weak refusal direction should not be expected to produce
+a strong guided-mutation advantage. The honest next step is the evaluation this paper could not
+run: the full 25-behavior × 3-seed matrix (§4, §6), with the corrected judge, once compute allows.
+
 ## References
 
 - Yu, J. et al. "GPTFUZZER: Red Teaming Large Language Models with Auto-Generated Jailbreak
