@@ -31,19 +31,24 @@ done to study a measurement problem (judge reliability), not to produce a usable
 
 - **Policy: no jailbreak strings or harmful completions are published in this repository.**
   Raw template/candidate/completion text (including anything touching the self-harm category in
-  AdvBench) is meant to be `.gitignore`d and never committed — only aggregate scalar metrics
-  (`results/*.json`) are meant to be tracked. **This policy is not yet fully enforced in
-  practice**: `/review 7` (`reviews/stage7.md`, FAIL) found that `results/debug_attribution_*.log`
-  — committed for §5.3's mechanism-quality evidence — contains verbatim fragments of AI-mutated
+  AdvBench) is `.gitignore`d and never committed — only aggregate scalar metrics
+  (`results/*.json`) are tracked. **A prior gap in this policy has been found and fixed**:
+  `/review 7` (`reviews/stage7.md`) found `results/debug_attribution_*.log` — committed for
+  §5.3's mechanism-quality evidence — contained verbatim fragments of AI-mutated
   jailbreak-template *framing* text (no actionable harmful payload, but still in-scope for this
-  policy) that slipped past the `.gitignore`'s filename-pattern matching. Remediation is pending
-  human sign-off; do not treat the "never committed" claim as currently accurate until that
-  review is resolved.
+  policy) that slipped past `.gitignore`'s filename-pattern matching. That text has since been
+  redacted from both the logs and `paper/paper.md` §5.3 (individual tokens and scores kept,
+  assembled span text removed), and `.gitignore` plus a new content-scanning check
+  (`scripts/check_no_raw_text.py`, wired into `.github/workflows/ci.yml` and
+  `.githooks/pre-commit`) now guard against a recurrence — see `reviews/stage7.md` for the full
+  verification trail.
 - Anyone needing to verify a specific claim must regenerate it themselves from the committed
   code, config, and public benchmark — this repo does not ship a copy of what was generated.
-- Full policy: `PLAN.md` §8 and `paper/paper.md` §7 (Ethics and Responsible Disclosure). As of
-  this writing, disclosure to affected open-weight model maintainers is still **pending** —
-  see the `DRAFT FLAG` in `paper/paper.md` §7 before treating this work as public-ready.
+- Full policy: `PLAN.md` §8 and `paper/paper.md` §7 (Ethics and Responsible Disclosure). Disclosure
+  plan (recorded decision, not yet executed): notices to Microsoft (MSRC — Phi-4-mini-instruct,
+  Phi-3.5-mini-instruct) and Alibaba/Qwen (Qwen2.5-3B-Instruct) at the time of arXiv posting.
+  **Gate 7 (`reviews/stage7.md`) is currently FAIL, pending required human 👤 sign-off** — do
+  not treat this work as public-ready until that sign-off happens.
 
 ## Reproduction
 

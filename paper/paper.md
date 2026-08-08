@@ -2,8 +2,9 @@
 title: >
   Judge-Shaped, Not Harm-Shaped: A Persistent Measurement-Validity Failure in Jailbreak
   Success Judges, and an Honest Null Result for Activation-Guided Mutation
-status: DRAFT — Day 7, for section-by-section PI review. Not yet reviewed (/review 7 not run).
-date: 2026-08-07
+status: DRAFT — /review 7 has run three times (reviews/stage7.md); current verdict FAIL, pending
+  human 👤 sign-off on the content-leak remediation and the disclosure plan below (§7).
+date: 2026-08-08
 ---
 
 > **How to read this draft.** Every number below is either (a) read directly from a committed
@@ -538,10 +539,14 @@ targeting AdvBench behaviors, some of which concern self-harm and other sensitiv
   drifts away from a refusal trajectory mid-generation, independent of whether guided mutation
   itself proves useful as an attack method. We suggest this as a concrete defensive application
   of the same interpretability signal studied here.
-- **Disclosure.** **[DRAFT FLAG — action item, not yet done.]** Per PLAN.md's own §8 (its ethics
-  gate), disclosure to the affected open-weight model maintainers should happen before this paper
-  is made public — this has not yet occurred as of this draft and should be completed, and the
-  outcome documented here, before submission.
+- **Disclosure.** Per PLAN.md's own §8 (its ethics gate), disclosure to the affected open-weight
+  model maintainers must happen before this paper is made public. **Recorded decision**:
+  disclosure notices will be sent to Microsoft (MSRC, for Phi-4-mini-instruct and
+  Phi-3.5-mini-instruct) and to Alibaba/Qwen (for Qwen2.5-3B-Instruct) at the time of arXiv
+  posting, consistent with responsible-disclosure norms for open-weight models tested with
+  published techniques. This is a stated plan tied to a concrete trigger (arXiv posting), not an
+  open-ended action item — update this paragraph with the actual outcome (dates sent,
+  acknowledgment received, if any) once posting happens.
 
 ## 8. Conclusion
 
