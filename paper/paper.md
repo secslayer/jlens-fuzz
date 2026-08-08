@@ -2,8 +2,9 @@
 title: >
   Judge-Shaped, Not Harm-Shaped: A Persistent Measurement-Validity Failure in Jailbreak
   Success Judges, and an Honest Null Result for Activation-Guided Mutation
-status: DRAFT — /review 7 has run three times (reviews/stage7.md); current verdict FAIL, pending
-  human 👤 sign-off on the content-leak remediation and the disclosure plan below (§7).
+status: DRAFT — Gate 7 signed off 2026-08-08 (reviews/stage7-human-signoff.md); pre-arXiv. Not
+  yet posted or tagged; disclosure to MSRC/Alibaba (§7) is planned for posting time, not yet
+  sent.
 date: 2026-08-08
 ---
 

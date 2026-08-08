@@ -1,0 +1,59 @@
+# CITATION.cff — Citation File Format 1.2.0 (https://citation-file-format.github.io/)
+# Verified against the live schema.json/schema-guide.md before writing this file.
+#
+# Known gaps, left as explicit TODOs rather than guessed at (do not silently invent these):
+#   - `license`: omitted entirely. No LICENSE file exists in this repo yet (see README.md's own
+#     "Do not treat this repo as licensed for reuse until one is added" note) -- adding an SPDX
+#     license id here without a matching LICENSE file would be a false claim. Add both together.
+#   - `authors[0]`'s given-names/family-names split below is a best-effort parse of the name as
+#     signed in reviews/stage7-human-signoff.md ("muhammed muiz arummal") -- correct it if the
+#     split (given: "Muhammed Muiz", family: "Arummal") is wrong. `affiliation` is left unset
+#     (fill in if applicable; CFF allows omitting it).
+#   - `preferred-citation.url`/`identifiers`: arXiv ID is not yet assigned (PLAN.md §11/§7,
+#     paper/paper.md §7 -- disclosure to MSRC/Alibaba is planned for arXiv-posting time, not sent
+#     yet, so posting hasn't happened). Fill in the arxiv.org/abs/<ID> URL once posted.
+#   - `date-released`: intentionally omitted -- set it to the actual v1.0-arxiv tag date at
+#     release time (RUNBOOK.md's release steps), not before.
+
+cff-version: 1.2.0
+message: >-
+  If you use this software, please cite both the paper (see preferred-citation) and, if
+  referring to the pipeline/codebase itself, this repository.
+title: >-
+  jlens-fuzz: Judge-Shaped, Not Harm-Shaped: A Persistent Measurement-Validity Failure in
+  Jailbreak Success Judges, and an Honest Null Result for Activation-Guided Mutation
+type: software
+authors:
+  - given-names: Muhammed Muiz
+    family-names: Arummal
+    email: abdulmuiz3570@gmail.com
+repository-code: "https://github.com/secslayer/jlens-fuzz"
+url: "https://github.com/secslayer/jlens-fuzz"
+abstract: >-
+  Interpretability-guided jailbreak fuzzing for open-weight LLMs. Reports two findings: a
+  measurement-validity failure in a widely-reused jailbreak success judge that persists after a
+  deliberate fix (persona-wrapper false positives), and an honest null result for
+  activation-guided span mutation vs. uniform mutation, with a mechanistic explanation grounded
+  in refusal-direction separation quality. Full paper: paper/paper.md.
+keywords:
+  - jailbreak
+  - LLM safety
+  - red-teaming
+  - interpretability
+  - activation steering
+  - refusal direction
+  - judge reliability
+  - AdvBench
+
+preferred-citation:
+  type: unpublished
+  title: >-
+    Judge-Shaped, Not Harm-Shaped: A Persistent Measurement-Validity Failure in Jailbreak Success
+    Judges, and an Honest Null Result for Activation-Guided Mutation
+  authors:
+    - given-names: Muhammed Muiz
+      family-names: Arummal
+      email: abdulmuiz3570@gmail.com
+  year: 2026
+  # url: "https://arxiv.org/abs/XXXX.XXXXX"   # fill in once posted (paper/paper.md §7)
+  notes: "arXiv preprint, not yet posted as of this file's creation (Gate 7 signed off; disclosure to MSRC/Alibaba planned for posting time, not yet sent -- see paper/paper.md §7 and reviews/stage7-human-signoff.md)."

@@ -260,18 +260,37 @@ PLAN.md §11's **DECIDED reframe**:
 
 ## PART 7 - Publish the preprint (arXiv, free)  [B]
 
-1. [L] `make paper`, review the PDF.
+**Release checklist (Stage 7 exit, PLAN.md §6/§9) — run this before anything below.**
+
+0. [L] `make release` — runs tests, the raw-text content scan
+   (`scripts/check_no_raw_text.py`, `reviews/stage7.md`), and prints every remaining
+   `[DRAFT FLAG]` in `paper/paper.md` plus a manual checklist (CI green, Gate 7 signed off,
+   no unresolved disclosure flag). It does **not** tag for you — read its output, confirm each
+   item, then continue. As of this writing `paper/paper.md` is not converted to PDF/LaTeX by
+   any script (`scripts/assemble_paper.py` doesn't exist — `make paper` will fail; the paper
+   was assembled by hand from `results/*.json`, see `paper/paper.md`'s own header) — step 1
+   below is manual until that changes.
+
+1. [L] Convert `paper/paper.md` to arXiv's expected format (PDF via pandoc/LaTeX, or a bundled
+   LaTeX source tree) — there is no automated pipeline for this yet; do it manually or write
+   `scripts/assemble_paper.py` first if you want one.
 2. [B] https://arxiv.org -> login/register (institutional email helps).
 3. [B] **Endorsement gotcha:** first-time `cs.CR`/`cs.CL` authors may need an endorsement
-   (https://arxiv.org/help/endorsement). Arrange it by Day 5 so it doesn't block you.
+   (https://arxiv.org/help/endorsement). Arrange it early so it doesn't block you.
 4. [B] **Submit -> Start New Submission** -> primary `cs.CR`, cross-list `cs.CL` -> upload PDF/LaTeX
    -> title/abstract/authors -> **Preview -> Submit**. Announced next business day.
-5. [L] Tag the release:
+5. [B] **Send the recorded disclosure notices now** (`paper/paper.md` §7): MSRC (for
+   Phi-4-mini-instruct, Phi-3.5-mini-instruct) and Alibaba/Qwen (for Qwen2.5-3B-Instruct) — the
+   plan says "at the time of arXiv posting," so this is that time. Record the actual send
+   date/outcome back into `paper/paper.md` §7 and `reviews/stage7-human-signoff.md` afterward.
+6. [L] Tag the release (manual — `make release` deliberately stops short of this):
    ```bash
-   git tag v1.0-arxiv && git push --tags
+   git tag -a v1.0-arxiv -m "v1.0-arxiv: Gate 7 signed off, paper frozen for arXiv"
+   git push origin v1.0-arxiv
    gh release create v1.0-arxiv --title "v1.0 (arXiv)" --notes "Preprint release"
    ```
-6. [B] Add `CITATION.cff` + the arXiv ID to the README (GitHub shows "Cite this repository").
+7. [L] Fill in the arXiv ID in `CITATION.cff`'s `preferred-citation.url` (currently a commented
+   placeholder) and commit. GitHub will then show "Cite this repository" using it.
 
 ---
 
