@@ -266,14 +266,22 @@ PLAN.md §11's **DECIDED reframe**:
    (`scripts/check_no_raw_text.py`, `reviews/stage7.md`), and prints every remaining
    `[DRAFT FLAG]` in `paper/paper.md` plus a manual checklist (CI green, Gate 7 signed off,
    no unresolved disclosure flag). It does **not** tag for you — read its output, confirm each
-   item, then continue. As of this writing `paper/paper.md` is not converted to PDF/LaTeX by
-   any script (`scripts/assemble_paper.py` doesn't exist — `make paper` will fail; the paper
-   was assembled by hand from `results/*.json`, see `paper/paper.md`'s own header) — step 1
-   below is manual until that changes.
+   item, then continue. `scripts/assemble_paper.py` still doesn't exist (`make paper` still
+   fails) — `paper/paper.md` itself was assembled by hand from `results/*.json`, not by a
+   script, and that hasn't changed. What *has* changed: PDF conversion (below) now does.
 
-1. [L] Convert `paper/paper.md` to arXiv's expected format (PDF via pandoc/LaTeX, or a bundled
-   LaTeX source tree) — there is no automated pipeline for this yet; do it manually or write
-   `scripts/assemble_paper.py` first if you want one.
+1. [L] `python scripts/build_paper_pdf.py` — converts the already-written `paper/paper.md` to
+   `paper/paper.pdf` via pandoc + xelatex (single-column academic layout, title/author/abstract
+   on the title page, numbered sections, references). Requires `pandoc` and `xelatex` on PATH.
+   Self-verifies afterward that every `§`-cross-reference, `[REDACTED ...]` marker, and
+   `[DRAFT FLAG]` in the source survived into the rendered PDF text — fails loudly rather than
+   silently shipping a PDF with dropped content. LaTeX-layer fixes (a missing bold-glyph
+   mapping, wide-table shrinking) live in `paper/pandoc-header.tex`, not in `paper.md` itself.
+   Known residual cosmetic issue: ~4 table cells with very long `results/*.log` file paths
+   overflow their column by up to ~0.22in (text is still fully legible, not cut off) — reducing
+   this further would require editing table content, which the build script deliberately
+   doesn't do. Re-run this script any time `paper/paper.md` changes; it's not run in CI (needs
+   a full TeX install).
 2. [B] https://arxiv.org -> login/register (institutional email helps).
 3. [B] **Endorsement gotcha:** first-time `cs.CR`/`cs.CL` authors may need an endorsement
    (https://arxiv.org/help/endorsement). Arrange it early so it doesn't block you.

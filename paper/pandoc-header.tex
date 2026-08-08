@@ -1,0 +1,20 @@
+% LaTeX header for scripts/build_paper_pdf.py's pandoc+xelatex build of paper/paper.md.
+% Exists because two real conversion issues showed up on the first build (both fixed here,
+% not by editing paper.md's content):
+%   1. lmroman's BOLD weight has no glyph for U+2264 (<=), used inside a **bold** span in §6.
+%      Mapped through math mode so it renders regardless of surrounding text weight.
+%   2. Wide tables (esp. Appendix A's provenance table, long results/*.log file-path cells)
+%      overflow a 1in-margin single column at normal size. scriptsize + sloppy + a wider
+%      emergency-stretch budget resolves all but ~4 residual minor (<=0.22in) overfull-hbox
+%      warnings on individual long unbroken file-path tokens -- cosmetic, not illegible;
+%      further reduction would require editing the source content, which is out of scope.
+\usepackage{etoolbox}
+\usepackage[htt]{hyphenat}
+\usepackage{newunicodechar}
+\newunicodechar{≤}{\ensuremath{\leq}}
+\AtBeginEnvironment{longtable}{\scriptsize\sloppy}
+\emergencystretch=3em
+\makeatletter
+\let\origttfamily\ttfamily
+\renewcommand{\ttfamily}{\origttfamily\hyphenchar\font=`\-\relax}
+\makeatother
