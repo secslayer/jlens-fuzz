@@ -1,49 +1,115 @@
 # jlens-fuzz
 
-Interpretability-guided jailbreak fuzzing for open-weight LLMs — a **proof-of-concept preprint**
-scaffold. We replace GPTFuzzer's sparse binary fitness with a refusal-probe signal on a partial
-forward pass, use a difference-in-means refusal direction to choose *where* to mutate, and test
-whether human seed templates can be dropped (the headline ablation). White-box target:
-`Qwen2.5-3B-Instruct`. Everything runs **free on Kaggle** — no paid APIs.
+Interpretability-guided jailbreak fuzzing for open-weight LLMs. We tested whether mutating a
+jailbreak template at the location a refusal direction (difference-in-means, extracted per
+[Arditi et al. 2024](https://arxiv.org/abs/2406.11717)) points to beats GPTFuzzer's uniform
+whole-template mutation. Along the way, our own pipeline caught its success judge lying to it —
+that became the headline. **Two findings, both artifact-backed:**
 
-> **Ethics:** this is defensive red-teaming using public benchmarks (AdvBench) on small open-weight
-> models. Do not commit generated attack strings (the `.gitignore` blocks them). See `PLAN.md §8`.
+1. **Judge reliability is a persistent, cross-judge problem, not one classifier's quirk.** The
+   standard `hubert233/GPTFuzz` RoBERTa judge inflates ASR via template-echo false positives. We
+   built a stricter two-stage replacement (keyword pre-filter + anti-roleplay LLM-as-judge
+   rubric) — and it *still* passed a persona-wrapper completion that actually refuses and offers
+   crisis-support resources, zero harmful content.
+2. **Activation-guided mutation shows no consistent, reliable ASR advantage over uniform
+   mutation**, on either of two targets tested (Qwen2.5-3B-Instruct, Phi-4-mini-instruct) — with
+   the mechanism independently confirmed as genuinely active (attribution fires every iteration,
+   search really does revisit mutated candidates), so the null isn't an artifact of the method
+   quietly doing nothing. The likely explanation: the guidance signal's usefulness tracks how
+   well the underlying refusal direction separates harmful from benign prompts, and that
+   separation is strong on one target and weak on the other.
 
-## Start here (read in this order)
-1. **`RUNBOOK.md`** — click-by-click: accounts, laptop, Kaggle, the daily loop, arXiv.
-2. **`ORCHESTRATION.md`** — how the pipeline is coordinated (the resumable job queue) + script specs.
-3. **`PLAN.md`** — the stage plan and the peer-review gates.
-4. **`CLAUDE.md`** — the rules Claude Code follows.
+**Read the paper: [`paper/paper.md`](paper/paper.md).** It states both findings precisely, with
+every number traced to its source file, and is explicit about what's still a `DRAFT FLAG`
+(unresolved provenance gaps, pending disclosure) — read that status before citing anything from
+it.
 
-## First commands
+## Ethics
+
+This is red-teaming research on public benchmarks (AdvBench) against small open-weight models,
+done to study a measurement problem (judge reliability), not to produce a usable attack tool.
+
+- **Policy: no jailbreak strings or harmful completions are published in this repository.**
+  Raw template/candidate/completion text (including anything touching the self-harm category in
+  AdvBench) is meant to be `.gitignore`d and never committed — only aggregate scalar metrics
+  (`results/*.json`) are meant to be tracked. **This policy is not yet fully enforced in
+  practice**: `/review 7` (`reviews/stage7.md`, FAIL) found that `results/debug_attribution_*.log`
+  — committed for §5.3's mechanism-quality evidence — contains verbatim fragments of AI-mutated
+  jailbreak-template *framing* text (no actionable harmful payload, but still in-scope for this
+  policy) that slipped past the `.gitignore`'s filename-pattern matching. Remediation is pending
+  human sign-off; do not treat the "never committed" claim as currently accurate until that
+  review is resolved.
+- Anyone needing to verify a specific claim must regenerate it themselves from the committed
+  code, config, and public benchmark — this repo does not ship a copy of what was generated.
+- Full policy: `PLAN.md` §8 and `paper/paper.md` §7 (Ethics and Responsible Disclosure). As of
+  this writing, disclosure to affected open-weight model maintainers is still **pending** —
+  see the `DRAFT FLAG` in `paper/paper.md` §7 before treating this work as public-ready.
+
+## Reproduction
+
+Everything runs on **Kaggle's free tier** (2×T4 GPUs/session) — no paid APIs, no local GPU
+needed for the control-plane laptop side. Full click-by-click instructions: `RUNBOOK.md`. Short
+version:
+
 ```bash
-python scripts/run_controller.py --lane core     # status board + next Kaggle launch lines
-# then follow RUNBOOK.md Part 2 to run on Kaggle
+# On Kaggle, after cloning the repo and installing requirements.txt:
+!python scripts/run_fuzz.py --method ours      --config configs/exp.yaml --smoke
+!python scripts/run_fuzz.py --method gptfuzzer --config configs/exp.yaml --smoke
+# swap --config configs/exp_phi4mini.yaml for the second target
 ```
 
-## What exists vs. what you build (be honest with yourself)
-**Ready to run now:**
-- `scripts/train_probes.py` — the refusal probe (Day 2 make-or-break gate). The quality bar.
-- `scripts/run_controller.py` — the resumable orchestrator.
-- `scripts/run_experiment.py` — the single-job dispatcher.
-- `scripts/run_parallel.sh` — two jobs, one per GPU.
-- `experiments.yaml`, `configs/exp.yaml` — the manifest + invariants.
-- `.claude/` — `builder` + `reviewer` subagents, `/review` + `/orchestrate` commands.
+`configs/exp.yaml` (Qwen2.5-3B, control) and `configs/exp_phi4mini.yaml` (Phi-4-mini, treatment)
+hold every invariant (judge, benchmark, budget, decoding params) fixed except the target model —
+required for cross-target ASR comparisons to mean anything (see `CLAUDE.md` rule 3).
+`experiments.yaml` is the full job manifest; `python scripts/run_controller.py --lane core` shows
+what's done/ready/blocked and prints the next Kaggle launch commands.
 
-**You write these with the `builder` subagent (interfaces in `ORCHESTRATION.md`):**
-`check_env.py`, `sanity_check.py`, `extract_direction.py`, `validate_signal.py`,
-**`run_fuzz.py`** (the critical path — unblocks nearly everything),
-`transfer_blackbox.py`, `make_figures.py`, `assemble_paper.py`.
+**Scale, stated plainly: every result in this repo is smoke-scale (`n=5` behaviors per
+condition, single seed, no replicates).** The originally planned full evaluation — 25 behaviors ×
+3 seeds × 2 targets — did not run; the free-tier compute budget was exhausted first. This is a
+hard resource constraint, not a pending TODO — see `paper/paper.md` §4 and §6 for the full
+accounting, and don't read the smoke-scale numbers as carrying more statistical weight than n=5
+supports.
 
-## Layout
+`scripts/make_figures.py` and `scripts/assemble_paper.py` (referenced by `experiments.yaml`'s
+`figures`/`paper` jobs and the `Makefile`'s `figures`/`paper` targets) are **not implemented** —
+`paper/paper.md` was assembled by hand directly from `results/*.json`, not generated by a script.
+`make status` / `make job JOB=<id>` do work today; `make figures` / `make paper` do not yet.
+
+## Provenance
+
+Every number in `paper/paper.md` is cited to a specific file — `results/*.json` (aggregate
+scalars, one file per run, each carrying a `_provenance` block with git SHA/config hash/
+timestamp), `results/*.npz` (direction/probe extraction artifacts), or `results/*.log` (console
+output committed verbatim, e.g. novel-prompt separation checks and debug-attribution traces).
+Numbers the paper could *not* trace to a committed file are explicitly marked `[DRAFT FLAG]` or
+"PI-reported, not yet artifact-backed" rather than presented as fact — see `paper/paper.md`
+Appendix A for the full per-claim provenance table.
+
+For the judge-reliability finding specifically, the full incident writeup — the original
+false-positive discovery, the two-stage fix, and the residual false positive found *after* the
+fix — is in **[`reviews/judge-validity-incident.md`](reviews/judge-validity-incident.md)**. For
+the project's stage-by-stage history, peer-review gates, and every design decision (including
+ones later reversed, documented rather than erased), see **[`PLAN.md`](PLAN.md)**.
+
+## Repo map
+
 ```
-PLAN.md ORCHESTRATION.md RUNBOOK.md CLAUDE.md README.md
-Makefile experiments.yaml requirements.txt .gitignore
-configs/exp.yaml
-scripts/{train_probes,run_controller,run_experiment}.py  scripts/run_parallel.sh
-.claude/agents/{reviewer,builder}.md  .claude/commands/{review,orchestrate}.md
-results/  reviews/  logs/          # created as you go (gitignored where appropriate)
+paper/paper.md                         the paper — read this first
+reviews/judge-validity-incident.md     full judge false-positive writeup
+reviews/stage*.md                      peer-review gate records (/review N)
+PLAN.md                                stage plan, gates, every design decision + reversal
+RUNBOOK.md                             click-by-click: accounts, Kaggle, the daily loop
+ORCHESTRATION.md                       pipeline coordination + script interfaces
+CLAUDE.md                              rules this project's coding agent follows
+configs/exp*.yaml                      per-target invariants (judge, budget, decoding params)
+experiments.yaml                       job manifest (deps + output + command per job)
+scripts/run_fuzz.py                    the core fuzzing loop (guided vs. uniform mutation)
+scripts/judge.py                       the two-stage judge (shared across all consumers)
+scripts/run_controller.py              resumable orchestrator (status board + next batch)
+results/                               aggregate-only run outputs (raw prompts gitignored)
 ```
 
 ## License
-MIT (recommended). Add a `LICENSE` file before releasing.
+
+No `LICENSE` file exists yet. Do not treat this repo as licensed for reuse until one is added.
