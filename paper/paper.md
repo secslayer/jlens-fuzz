@@ -504,10 +504,16 @@ targeting AdvBench behaviors, some of which concern self-harm and other sensitiv
 **Content warning applies to the underlying (unpublished) data this paper describes.**
 
 - **No successful jailbreak strings are published in this repository or paper.** Raw
-  template/candidate/completion text is gitignored (`results/**/prompts_*`,
-  `results/**/*jailbreak*`) and never committed, for the entire duration of this project — this
-  is enforced at the tooling level (every commit is grepped for accidental inclusion before it is
-  made), not only by convention.
+  template/candidate/completion text is excluded via `.gitignore` patterns
+  (`results/**/prompts_*`, `results/**/*jailbreak*`) and manual review, not automated tooling —
+  no pre-commit hook or CI content scan exists in this repository. We note this was enforced
+  **imperfectly**: `results/debug_attribution_{qwen,phi}.log`, a diagnostic artifact whose
+  filename didn't match either `.gitignore` pattern, was committed containing assembled
+  jailbreak-template fragments before `/review 7` caught it (`reviews/stage7.md`). Those fragments
+  have since been redacted from both the log files and this paper's own §5.3 — see the corrected
+  debug-log handling there and in Appendix A. Filename-pattern `.gitignore` matching remains a
+  real gap for any future artifact of a new shape; widening it, or adding real automated
+  enforcement, is tracked as an open item, not yet done.
 - **Regeneration, not redistribution.** Anyone needing to verify a specific claim in this paper
   (e.g. re-examining the ChadGPT false positive, §5.1) must regenerate it themselves using the
   committed code, config, and behavior benchmark (all public) — we do not ship a copy of the
