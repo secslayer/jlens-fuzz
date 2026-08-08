@@ -404,25 +404,29 @@ An earlier version of this section claimed attribution "localizes to refusal-rel
 based on an informal chat excerpt that was never saved as an artifact. We re-ran the diagnostic
 with `--debug-attribution` (2 behaviors per target, real forward passes, not synthetic) and saved
 the full output to `results/debug_attribution_qwen.log` (57 attribution calls) and
-`results/debug_attribution_phi.log` (80 attribution calls) — both now committed. Reading the real
-logs, the earlier claim was **too strong**: localization is real on some inputs and largely absent
-on others, varying by which template (original seed or mutated child) is selected. Representative
-examples, quoted directly from the committed logs:
+`results/debug_attribution_phi.log` (80 attribution calls) — both now committed, with the
+assembled selected-span text redacted (`text='[REDACTED — jailbreak-template fragment]'`) per
+`/review 7`'s finding that committing that text, even in a diagnostic log, fell outside this
+project's own no-jailbreak-strings policy; the individual tokens, per-token projection scores,
+and `sum_score` values below are unredacted and are the actual evidence for this section's claim.
+Reading the real logs, the earlier claim was **too strong**: localization is real on some inputs
+and largely absent on others, varying by which template (original seed or mutated child) is
+selected. Representative examples, with individual top-projecting tokens quoted directly from the
+committed logs and assembled span text redacted:
 
 - **Strongly refusal-semantic** (Qwen, iteration 1, `results/debug_attribution_qwen.log`): top
   tokens include `harmful` (13.51), `illegal` (12.46), `policy` (13.18), `ethical` (11.77);
-  selected span `"and illegal information, including any kind of malware."`, `sum_score=108.58`.
+  selected span `[REDACTED — jailbreak-template fragment]`, `sum_score=108.58`.
 - **Generic / template-structural, same target** (Qwen, iteration 0, same file): top tokens are
   `rules` (8.08), `it` (8.08), `opposite` (5.76), `contrad[iction]` (6.23) — function words and
-  template scaffolding, not harm-related; selected span `"with your default answer or with
-  hardcoded rules, you"`, `sum_score=47.08` — less than half the semantic example's score.
+  template scaffolding, not harm-related; selected span `[REDACTED — jailbreak-template
+  fragment]`, `sum_score=47.08` — less than half the semantic example's score.
 - **Strongly refusal-semantic** (Phi, `results/debug_attribution_phi.log`): top tokens include
   `illegal` (10.19), `malware` (10.77), `harmful` (9.57), `discrimination` (7.98), `racism`
-  (8.47); selected span `"harmful and illegal information, including any kind of malware"`,
-  `sum_score=84.96`.
+  (8.47); selected span `[REDACTED — jailbreak-template fragment]`, `sum_score=84.96`.
 - **Generic, same target** (Phi, same file): top tokens are `mode` (6.86), `pretend` (6.34),
-  `Anti[GPT]` (6.28), `character` (6.09); selected span `"the direct antithesis of your original
-  response."`, `sum_score=58.36`.
+  `Anti[GPT]` (6.28), `character` (6.09); selected span `[REDACTED — jailbreak-template
+  fragment]`, `sum_score=58.36`.
 
 Aggregated over every logged call: Qwen's per-selection `sum_score` ranges **40.0–116.0** (mean
 82.6, n=57); Phi's ranges **51.7–87.2** (mean 65.8, n=80) — Phi's attribution is more uniformly
@@ -601,6 +605,6 @@ to the author/year/venue/arXiv-ID facts verified above) still need to be pulled 
 | ChadGPT false positive, true Qwen `ours` ASR 0.2 | `reviews/judge-validity-incident.md` | prose | PI hand-verified, not written back into any JSON |
 | Original Phi incident, 4/4 false positives, asr=0.8 | `reviews/judge-validity-incident.md` | prose | PI hand-verified (qualitative) / **no backing JSON for the 0.8 figure** |
 | Pool-77 postfix Qwen 0.4/0.4 | — | — | **No backing file in this repository; PI-reported only** |
-| §5.3 attribution-quality examples + sum_score ranges (Qwen 40.0–116.0/82.6, Phi 51.7–87.2/65.8) | `results/debug_attribution_qwen.log`, `results/debug_attribution_phi.log` | `top-10 tokens`/`selected span` lines, `sum_score=` values | Artifact-backed (console log, committed verbatim); superseded an earlier unbacked chat-excerpt claim |
+| §5.3 attribution-quality examples + sum_score ranges (Qwen 40.0–116.0/82.6, Phi 51.7–87.2/65.8) | `results/debug_attribution_qwen.log`, `results/debug_attribution_phi.log` | `top-10 tokens`/`selected span` lines (assembled span `text=` field redacted per `/review 7`; token/score/index fields unredacted), `sum_score=` values | Artifact-backed (console log, committed verbatim); superseded an earlier unbacked chat-excerpt claim |
 | First `MUTATED_CHILD` selection at iteration 24 (Qwen) | `results/debug_attribution_qwen.log` | `behavior_idx=1` iteration-24 `pool_select` line | Artifact-backed |
 | select_ucb1/backpropagate tree-search-engagement proof (synthetic) | (verbatim-extracted, run standalone, not itself a committed artifact) | — | Reproducible from `scripts/run_fuzz.py` source; not a `results/*.json` fact; independently corroborated by the real iteration-24 log line above |
