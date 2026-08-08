@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Local pre-commit guard against committing raw jailbreak/completion text (CLAUDE.md golden
+# rule 1, PLAN.md §8, reviews/stage7.md). Runs scripts/check_no_raw_text.py against every
+# staged file under results/ before letting the commit through.
+#
+# Not active by default -- git does not clone hook activation, only hook FILES. Enable once
+# per checkout with:
+#   git config core.hooksPath .githooks
+# (RUNBOOK.md's bootstrap cell runs this on every fresh Kaggle session, since that is where
+# this project's commits actually originate -- see RUNBOOK.md Part 2.4.)
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+staged=$(git diff --cached --name-only --diff-filter=ACM -- 'results/*')
+if [ -z "$staged" ]; then
+  exit 0
+fi
+
+# shellcheck disable=SC2086
+python3 scripts/check_no_raw_text.py $staged

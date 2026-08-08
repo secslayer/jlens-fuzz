@@ -111,6 +111,11 @@ if not pathlib.Path(root).exists():
 else:
     subprocess.run(["git","pull","-q"], cwd=root, check=True)
 %cd /kaggle/working/jlens-fuzz
+# Activate the local raw-text pre-commit guard (reviews/stage7.md) -- core.hooksPath is a LOCAL
+# git config, never cloned, so this must run every fresh session or commits from THIS session
+# won't be checked before they leave Kaggle. Backstopped by CI's own copy of the same check
+# (.github/workflows/ci.yml), which runs after the fact regardless of this line.
+!git config core.hooksPath .githooks
 !pip install -q -r requirements.txt
 !python -c "import torch; print('GPUs:', torch.cuda.device_count())"
 print("ready")

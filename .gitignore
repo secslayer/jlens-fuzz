@@ -9,5 +9,15 @@ checkpoints/
 # never commit generated attack strings
 results/**/prompts_*
 results/**/*jailbreak*
+# Widened after reviews/stage7.md found results/debug_attribution_*.log committed with
+# assembled jailbreak-template fragments -- its filename matched neither pattern above.
+# Filename-pattern matching alone is not a safety guarantee (a new artifact shape can always
+# slip through); default-deny any log/jsonl under results/ instead, and force-add
+# (git add -f) only after scripts/check_no_raw_text.py confirms the specific file is clean.
+# Already-tracked files (e.g. results/qwen_novel_check.log, results/debug_attribution_*.log
+# itself, both reviewed and redacted) are unaffected -- git does not re-apply .gitignore to
+# paths already in the index.
+results/**/*.log
+results/**/*.jsonl
 paper/build/
 state.db

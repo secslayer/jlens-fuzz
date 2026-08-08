@@ -1,8 +1,11 @@
 name: CI
 
 on:
+  # Widened from `branches: [main]` (reviews/stage7.md): this project's actual commits push
+  # directly to feature branches (e.g. target-ladder-scaffold) from Kaggle sessions, not just
+  # main -- the old scoping meant CI, including the content-scan step below, never ran on the
+  # commits that actually needed checking.
   push:
-    branches: [main]
   pull_request:
 
 jobs:
@@ -17,3 +20,5 @@ jobs:
         run: pip install pytest pyyaml
       - name: Run tests
         run: python -m pytest -q
+      - name: No raw jailbreak/completion text under results/ (reviews/stage7.md)
+        run: python scripts/check_no_raw_text.py

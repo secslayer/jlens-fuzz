@@ -505,15 +505,23 @@ targeting AdvBench behaviors, some of which concern self-harm and other sensitiv
 
 - **No successful jailbreak strings are published in this repository or paper.** Raw
   template/candidate/completion text is excluded via `.gitignore` patterns
-  (`results/**/prompts_*`, `results/**/*jailbreak*`) and manual review, not automated tooling —
-  no pre-commit hook or CI content scan exists in this repository. We note this was enforced
-  **imperfectly**: `results/debug_attribution_{qwen,phi}.log`, a diagnostic artifact whose
-  filename didn't match either `.gitignore` pattern, was committed containing assembled
-  jailbreak-template fragments before `/review 7` caught it (`reviews/stage7.md`). Those fragments
-  have since been redacted from both the log files and this paper's own §5.3 — see the corrected
-  debug-log handling there and in Appendix A. Filename-pattern `.gitignore` matching remains a
-  real gap for any future artifact of a new shape; widening it, or adding real automated
-  enforcement, is tracked as an open item, not yet done.
+  (`results/**/prompts_*`, `results/**/*jailbreak*`, and — since the finding below —
+  `results/**/*.log`, `results/**/*.jsonl` by default). We note this was enforced
+  **imperfectly** at first: `results/debug_attribution_{qwen,phi}.log`, a diagnostic artifact
+  whose filename didn't match either original `.gitignore` pattern, was committed containing
+  assembled jailbreak-template fragments before `/review 7` caught it (`reviews/stage7.md`).
+  Those fragments have since been redacted from both the log files and this paper's own §5.3 —
+  see the corrected debug-log handling there and in Appendix A. **This is now backed by real
+  automated tooling, not just convention or filename patterns**: `scripts/check_no_raw_text.py`
+  content-scans (not just filename-matches) every tracked file under `results/` for known
+  raw-text field shapes (`text=`, `"completion"`, `"candidate"`, `"prompt"`, `"template"`), runs
+  in CI on every push (`.github/workflows/ci.yml`, widened to cover all branches — the project's
+  actual commits push to feature branches, not just `main`), and is wired as a local pre-commit
+  hook (`.githooks/pre-commit`, activated automatically by the Kaggle bootstrap cell,
+  `RUNBOOK.md` §2.4, since that is where this project's commits actually originate). This is a
+  real, meaningful control, not a perfect guarantee: it catches known field-name shapes, not
+  arbitrary future ones — pair it with the same manual review discipline as before, not as a
+  replacement for it.
 - **Regeneration, not redistribution.** Anyone needing to verify a specific claim in this paper
   (e.g. re-examining the ChadGPT false positive, §5.1) must regenerate it themselves using the
   committed code, config, and behavior benchmark (all public) — we do not ship a copy of the
