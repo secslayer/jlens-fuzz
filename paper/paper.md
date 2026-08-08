@@ -139,7 +139,7 @@ baseline in this work**; PLAN.md's compute-budget lock (§10, and see §4) scope
 comparison to GPTFuzzer alone as a sufficient baseline for a preprint, with AutoDAN explicitly
 deferred to an extended lane that did not get funded before compute ran out. Separately, a growing
 body of work has begun questioning the reliability of jailbreak judges themselves: "How Reliable
-Is Your Jailbreak Judge?" [Gao et al., 2026, arXiv:2606.25487] finds that a large and growing
+Is Your Jailbreak Judge?" [Gao, 2026, arXiv:2606.25487] finds that a large and growing
 share of reported jailbreak-evaluation results using LLM-judges are unreliable, both on average
 and under deliberate adversarial pressure; "LLM-Safety Evaluations Lack Robustness"
 [Beyer et al., 2025, arXiv:2503.02574] and "Confusion is the Final Barrier" [Yan et al., 2025,
@@ -555,11 +555,11 @@ run: the full 25-behavior × 3-seed matrix (§4, §6), with the corrected judge,
 - Yu, J. et al. "GPTFUZZER: Red Teaming Large Language Models with Auto-Generated Jailbreak
   Prompts." arXiv:2309.10253, 2023.
 - Liu, X. et al. "AutoDAN: Generating Stealthy Jailbreak Prompts on Aligned Large Language
-  Models." arXiv:2310.04451, 2023.
+  Models." arXiv:2310.04451, 2023. Published as a conference paper at ICLR 2024.
 - Arditi, A. et al. "Refusal in Language Models Is Mediated by a Single Direction."
   arXiv:2406.11717, 2024.
 - Mei, L. et al. "'Not Aligned' is Not 'Malicious': Being Careful about Hallucinations of Large
-  Language Models' Jailbreak." arXiv:2406.11668, 2024.
+  Language Models' Jailbreak." arXiv:2406.11668, 2024. COLING 2025.
 - Beyer, T. et al. "LLM-Safety Evaluations Lack Robustness." arXiv:2503.02574, 2025.
 - Yu, M. et al. "AJF: Adaptive Jailbreak Framework Based on the Comprehension Ability of
   Black-Box Large Language Models." arXiv:2505.23404, 2025.
@@ -570,14 +570,18 @@ run: the full 25-behavior × 3-seed matrix (§4, §6), with the corrected judge,
 - Collu, M. G. et al. "Refusal Before Decoding: Detecting and Exploiting Refusal Signals in
   Intermediate LLM Activations" (informally "Mechanistic AutoDAN" in this project's internal
   planning docs). arXiv:2605.28553, 2026.
-- Gao, Y. et al. "How Reliable Is Your Jailbreak Judge? Calibration and Adversarial Robustness of
+- Gao, Y. "How Reliable Is Your Jailbreak Judge? Calibration and Adversarial Robustness of
   Automated ASR Scoring." arXiv:2606.25487, 2026.
 
-**[DRAFT FLAG]** All arXiv IDs above were checked live against arxiv.org during drafting (title
-match confirmed, and first-author names confirmed via each page's `citation_author` metadata),
-but full bibliographic details (venue, complete author lists beyond the first author, page
-numbers) have not been independently verified — standard BibTeX entries should be pulled before
-submission.
+All 9 arXiv IDs above (plus `hubert233/GPTFuzz`, the HuggingFace model ID cited throughout the
+body — confirmed to be a real, public, MIT-licensed RoBERTa classifier) were re-verified live
+against arxiv.org: title, full author list, and posting year all confirmed to match exactly.
+Two corrections made from this pass: AutoDAN (ICLR 2024) and "Not Aligned" is Not "Malicious"
+(COLING 2025) are peer-reviewed publications, not arXiv-only preprints, and their venue is now
+noted; the "How Reliable Is Your Jailbreak Judge?" citation previously read "Gao, Y. et al." but
+is a solo-authored paper (Yang Gao, Veyon Solutions) — corrected to drop "et al." here and in the
+§2 in-text citation. **[DRAFT FLAG]**: page numbers and full BibTeX-formatted entries (as opposed
+to the author/year/venue/arXiv-ID facts verified above) still need to be pulled before submission.
 
 ## Appendix A — Full provenance table
 
