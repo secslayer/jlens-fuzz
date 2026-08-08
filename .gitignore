@@ -21,3 +21,17 @@ results/**/*.log
 results/**/*.jsonl
 paper/build/
 state.db
+
+# LaTeX build byproducts (paper/paper.tex + paper/references.bib -> paper/paper.pdf via
+# pdflatex + biber) -- regenerable, not meant to be committed. paper.pdf itself IS tracked.
+paper/*.aux
+paper/*.bbl
+paper/*.bcf
+paper/*.blg
+paper/*.log
+paper/*.out
+paper/*.run.xml
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz
+paper/*.toc
