@@ -2,10 +2,14 @@
 title: >
   Judge-Shaped, Not Harm-Shaped: A Persistent Measurement-Validity Failure in Jailbreak
   Success Judges, and an Honest Null Result for Activation-Guided Mutation
-status: DRAFT — Gate 7 signed off 2026-08-08 (reviews/stage7-human-signoff.md); pre-arXiv. Not
-  yet posted or tagged; disclosure to MSRC/Alibaba (§7) is planned for posting time, not yet
-  sent.
-date: 2026-08-08
+status: >-
+  DRAFT — reviewed three times (reviews/stage7.md), Gate 7 signed off 2026-08-08
+  (reviews/stage7-human-signoff.md), numerically re-verified and converted to LaTeX 2026-08-09
+  (paper/paper.tex compiles clean — zero LaTeX errors, zero unresolved \cref/\cite warnings —
+  this markdown file is the source of record it was derived from, not the submission artifact
+  itself). pre-arXiv. Not yet posted or tagged; disclosure to MSRC/Alibaba (§7) is planned for
+  posting time, not yet sent.
+date: 2026-08-09
 ---
 
 > **How to read this draft.** Every number below is either (a) read directly from a committed

@@ -7,8 +7,11 @@
 #     license id here without a matching LICENSE file would be a false claim. Add both together.
 #   - `authors[0]`'s given-names/family-names split below is a best-effort parse of the name as
 #     signed in reviews/stage7-human-signoff.md ("muhammed muiz arummal") -- correct it if the
-#     split (given: "Muhammed Muiz", family: "Arummal") is wrong. `affiliation` is left unset
-#     (fill in if applicable; CFF allows omitting it).
+#     split (given: "Muhammed Muiz", family: "Arummal") is wrong.
+#   - `affiliation`: set to the literal string "TODO: fill in" below (CFF's schema requires a
+#     non-empty string if the field is present at all, so an empty placeholder isn't valid --
+#     verified against schema.json). Replace with the real affiliation, or delete the
+#     `affiliation:` line entirely if independent/unaffiliated; CFF allows omitting it.
 #   - `preferred-citation.url`/`identifiers`: arXiv ID is not yet assigned (PLAN.md §11/§7,
 #     paper/paper.md §7 -- disclosure to MSRC/Alibaba is planned for arXiv-posting time, not sent
 #     yet, so posting hasn't happened). Fill in the arxiv.org/abs/<ID> URL once posted.
@@ -27,6 +30,7 @@ authors:
   - given-names: Muhammed Muiz
     family-names: Arummal
     email: abdulmuiz3570@gmail.com
+    affiliation: "TODO: fill in"
 repository-code: "https://github.com/secslayer/jlens-fuzz"
 url: "https://github.com/secslayer/jlens-fuzz"
 abstract: >-
@@ -34,7 +38,8 @@ abstract: >-
   measurement-validity failure in a widely-reused jailbreak success judge that persists after a
   deliberate fix (persona-wrapper false positives), and an honest null result for
   activation-guided span mutation vs. uniform mutation, with a mechanistic explanation grounded
-  in refusal-direction separation quality. Full paper: paper/paper.md.
+  in refusal-direction separation quality. Full paper: paper/paper.tex (compiles to
+  paper/paper.pdf); paper/paper.md is the markdown source of record it was derived from.
 keywords:
   - jailbreak
   - LLM safety
