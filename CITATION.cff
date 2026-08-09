@@ -8,10 +8,7 @@
 #   - `authors[0]`'s given-names/family-names split below is a best-effort parse of the name as
 #     signed in reviews/stage7-human-signoff.md ("muhammed muiz arummal") -- correct it if the
 #     split (given: "Muhammed Muiz", family: "Arummal") is wrong.
-#   - `affiliation`: set to the literal string "TODO: fill in" below (CFF's schema requires a
-#     non-empty string if the field is present at all, so an empty placeholder isn't valid --
-#     verified against schema.json). Replace with the real affiliation, or delete the
-#     `affiliation:` line entirely if independent/unaffiliated; CFF allows omitting it.
+#   - `affiliation`: set to "Independent Researcher" per the PI's confirmation.
 #   - `preferred-citation.url`/`identifiers`: arXiv ID is not yet assigned (PLAN.md §11/§7,
 #     paper/paper.md §7 -- disclosure to MSRC/Alibaba is planned for arXiv-posting time, not sent
 #     yet, so posting hasn't happened). Fill in the arxiv.org/abs/<ID> URL once posted.
@@ -30,7 +27,7 @@ authors:
   - given-names: Muhammed Muiz
     family-names: Arummal
     email: abdulmuiz3570@gmail.com
-    affiliation: "TODO: fill in"
+    affiliation: "Independent Researcher"
 repository-code: "https://github.com/secslayer/jlens-fuzz"
 url: "https://github.com/secslayer/jlens-fuzz"
 abstract: >-
@@ -59,6 +56,7 @@ preferred-citation:
     - given-names: Muhammed Muiz
       family-names: Arummal
       email: abdulmuiz3570@gmail.com
+      affiliation: "Independent Researcher"
   year: 2026
   # url: "https://arxiv.org/abs/XXXX.XXXXX"   # fill in once posted (paper/paper.md §7)
   notes: "arXiv preprint, not yet posted as of this file's creation (Gate 7 signed off; disclosure to MSRC/Alibaba planned for posting time, not yet sent -- see paper/paper.md §7 and reviews/stage7-human-signoff.md)."

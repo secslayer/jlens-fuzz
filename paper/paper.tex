@@ -36,7 +36,7 @@
 
 \title{Judge-Shaped, Not Harm-Shaped: A Persistent Measurement-Validity Failure in Jailbreak
   Success Judges, and an Honest Null Result for Activation-Guided Mutation}
-\author{Muhammed Muiz Arummal}
+\author{Muhammed Muiz Arummal \\ \small Independent Researcher}
 \date{DRAFT --- pre-arXiv --- reviewed three times (\texttt{reviews/stage7.md}), Gate 7 signed
   off 2026-08-08, numerically re-verified and converted to LaTeX 2026-08-09 (this file compiles
   clean: zero LaTeX errors, zero unresolved \texttt{\textbackslash cref}/\texttt{\textbackslash
@@ -77,6 +77,12 @@ findings argue that jailbreak-fuzzing evaluation infrastructure, not just attack
 deserves scrutiny.
 \end{abstract}
 
+% Kept for the arXiv version -- signals the provenance discipline behind every number in the
+% paper, which is itself part of this paper's contribution (see contribution 3, Section 1).
+% PI confirmed keeping it (2026-08-09). Flagged for the PI's own awareness, not acted on here:
+% this is the one element of the paper a standard-format venue (as opposed to arXiv) might
+% require removed or moved to an appendix/supplementary material, since it's a meta-note about
+% evidentiary conventions rather than paper content proper -- revisit if targeting such a venue.
 \begin{quote}
 \noindent\textbf{How to read this draft.} Every number below is either (a) read directly from a
 committed \texttt{results/*.json} / \texttt{results/*.npz} file---cited inline as
@@ -329,7 +335,11 @@ are held fixed.
 (\texttt{llm-attacks/llm-attacks}), \texttt{query\_budget=40} full-generation queries per
 behavior, \texttt{max\_iterations=100}, \texttt{decode\_temperature=0.7},
 \texttt{decode\_top\_p=0.9}---identical across every condition reported
-(\texttt{configs/exp.yaml}, \texttt{configs/exp\_phi4mini.yaml}).
+(\texttt{configs/exp.yaml}, \texttt{configs/exp\_phi4mini.yaml}). \texttt{max\_iterations} is
+non-binding under \texttt{-{}-fitness judge}: every iteration is a full query, so the loop
+always hits the $\mathtt{query\_budget=40}$ cap (or succeeds) well before it could reach
+iteration $100$; the effective per-behavior bound throughout this paper is \texttt{query\_budget},
+not \texttt{max\_iterations}.
 
 \paragraph{Seed-pool subsampling (\texttt{seed\_pool\_size=12}).}
 We found, via a debug-logging pass over the UCB1 pool-selection trace, that the original
