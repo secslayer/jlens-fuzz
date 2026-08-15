@@ -193,7 +193,7 @@ def main():
               f"Do NOT proceed. Try: mean-pool tokens, multi-layer ensemble, or more data. "
               f"See PLAN.md Stage 2.")
     else:
-        print(f"\n[GATE 2 pass — still requires human check on novel prompts]")
+        print("\n[GATE 2 pass — still requires human check on novel prompts]")
 
 
 if __name__ == "__main__":
