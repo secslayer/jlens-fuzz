@@ -19,7 +19,9 @@ that became the headline. **Two findings, both artifact-backed:**
    well the underlying refusal direction separates harmful from benign prompts, and that
    separation is strong on one target and weak on the other.
 
-**Read the paper: [`paper/paper.md`](paper/paper.md).** It states both findings precisely, with
+**Read the paper: [`paper/paper.tex`](paper/paper.tex)** (compiles to `paper/paper.pdf`; this is
+the submission artifact) — or [`paper/paper.md`](paper/paper.md), the markdown source of record
+it was derived from and numerically re-verified against. It states both findings precisely, with
 every number traced to its source file, and is explicit about what's still a `DRAFT FLAG`
 (unresolved provenance gaps, pending disclosure) — read that status before citing anything from
 it.
@@ -100,7 +102,9 @@ ones later reversed, documented rather than erased), see **[`PLAN.md`](PLAN.md)*
 ## Repo map
 
 ```
-paper/paper.md                         the paper — read this first
+paper/paper.tex, references.bib        the paper — submission artifact, compiles to paper.pdf
+paper/paper.md                         markdown source of record paper.tex was derived from
+CITATION.cff                           how to cite this repo/paper (GitHub "Cite this repository")
 reviews/judge-validity-incident.md     full judge false-positive writeup
 reviews/stage*.md                      peer-review gate records (/review N)
 PLAN.md                                stage plan, gates, every design decision + reversal
