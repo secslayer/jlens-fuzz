@@ -1,5 +1,16 @@
 # ORCHESTRATION.md — coordinating the full matrix without losing your place
 
+> **NOTE (2026-08-09, what actually shipped):** the system described below is real and
+> functional (`experiments.yaml`, `scripts/run_controller.py`), but the delivered paper did not
+> run through it to completion — no `results/*.json` matching this file's declared job outputs
+> (`ours_seed1.json`, `main_table.json`, `abl_mut_uniform_*.json`, `figures/`, etc.) exists.
+> Free-tier compute was exhausted first (README.md's "Scale, stated plainly"; `PLAN.md`'s
+> top-of-document note), so what actually shipped is a small set of ad hoc `n=5`-per-condition
+> smoke runs (`results/*_smoke_pool12.json`) assembled by hand into `paper/paper.tex`, not this
+> file's core-lane DAG or `make figures`/`make paper`. Read this file as documentation of the
+> orchestration tooling that exists and could resume future (EXTENDED-lane) work, not as an
+> account of how the shipped results were produced.
+
 This upgrades the linear runbook into a **dependency-aware, resumable job queue**. It exists
 because the expanded plan (RQ1–4, Components 1–4, seed tiers, transfer, defenses, extra baselines)
 is too many runs to track by hand on a platform whose sessions die every ~12h. Read this with
@@ -30,7 +41,7 @@ direction ┘            │
                        ├─────────────────────────────► figures ─► paper
 gptfuzzer ─────────────┤                                  ▲
                        │                                   │
-probes+direction ─► ours ─► transfer_k3 ───────────────────┤
+probes+direction ─► ours ─► transfer_local ──────────────┤
               ├─► abl_mut_uniform  (RQ1: guided vs uniform) ┤
               ├─► abl_seed_bootstrap (RQ2 tier b) ──────────┤
               └─► abl_seed_random   (RQ2 tier c, headline) ─┘
@@ -117,7 +128,8 @@ ethics) still require your sign-off.
 
 The full pasted matrix (6 models × 6 baselines × defenses × tiers) is a multi-month paper, not a
 week. The **core lane is the preprint**: one white-box model, GPTFuzzer baseline, the RQ1 mutation
-ablation, the RQ2 seed-tier ablation (headline), K3 transfer, and the signal-validation evidence.
+ablation, the RQ2 seed-tier ablation (headline), local transfer (`transfer_local`), and the
+signal-validation evidence.
 Everything else is `extended` — real and wired, but off the critical path. If the 30-hr quota
 tightens, cut in this order: abl_seed_bootstrap (keep human + random as the two RQ2 endpoints),
 then autodan (GPTFuzzer alone is a sufficient baseline for a preprint).
