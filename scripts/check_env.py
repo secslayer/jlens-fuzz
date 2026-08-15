@@ -49,6 +49,10 @@ REQUIRED_PACKAGES = [
     ("matplotlib", "matplotlib"),
     ("joblib", "joblib"),
     ("huggingface_hub", "huggingface_hub"),
+    # scripts/run_fuzz.py's corpus_self_bleu() imports this unconditionally, but only in the
+    # aggregate-metrics step AFTER every behavior's generation+judging is done -- a missing
+    # nltk would otherwise waste an entire run's GPU budget before failing. Catch it here instead.
+    ("nltk", "nltk"),
 ]
 
 # Config keys that every downstream script relies on as shared invariants (CLAUDE.md rule 3).
