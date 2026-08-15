@@ -1,16 +1,28 @@
 # Research Automation Plan — Interpretability-Guided Jailbreak Fuzzing
 
+> **NOTE (2026-08-09, what actually shipped):** The "Scope (honest)" paragraph and the RQ3
+> transfer plan just below are the *original* plan, kept for history (this project documents
+> reversals rather than erasing them — see §11, §12). Both are superseded by what actually
+> happened: the headline is the **judge-reliability finding** (§11), not the seed-free ablation;
+> the reported scale is **`n=5` behaviors per condition** (README.md's "Scale, stated plainly"),
+> not 50 (this paragraph) or the 25×3-seed design §10 later locked to; and **RQ3 transfer never
+> ran** — no `results/*transfer*` file exists, and it does not appear in `paper/paper.tex`.
+> `Phi-3.5-mini-instruct` ended up in the paper in a different role entirely: the rubric-based
+> LLM judge (`scripts/judge.py`), not a transfer target. See `README.md` and `paper/paper.tex`
+> §4/§6 for the accurate, final accounting.
+
 > **NOTE (Kaggle-only path):** `RUNBOOK.md` v2 and `ORCHESTRATION.md` are authoritative for the
 > free Kaggle-only workflow. Mentions of RunPod/OpenRouter/Kimi-K3 below are legacy context;
 > the actual pipeline uses Kaggle only, and RQ3 transfer replays prompts on a second small
 > open-weight model **locally** (Phi-3.5-mini), no external API.
 
 
-**Scope (honest):** a *proof-of-concept preprint* in ~1 week. One white-box target you can
-actually run (`Qwen2.5-3B-Instruct`), 50 AdvBench behaviors, refusal probes as the
-interpretable signal (logit-lens/J-lens motivation, linear-probe realization), the
-**seed-free ablation as the headline**, and RQ3 transfer done **locally on Kaggle** by replaying
-optimized prompts on a second small open-weight model (Phi-3.5-mini). No external API — Kaggle only.
+**Scope (honest, as originally written — see the superseded-by note above):** a
+*proof-of-concept preprint* in ~1 week. One white-box target you can actually run
+(`Qwen2.5-3B-Instruct`), 50 AdvBench behaviors, refusal probes as the interpretable signal
+(logit-lens/J-lens motivation, linear-probe realization), the **seed-free ablation as the
+headline**, and RQ3 transfer done **locally on Kaggle** by replaying optimized prompts on a
+second small open-weight model (Phi-3.5-mini). No external API — Kaggle only.
 
 Everything below is designed to be executed by **Claude Code** with **peer-review gates**
 between stages. Nothing proceeds to the next stage until its gate passes.
@@ -208,6 +220,9 @@ Run `/review` at each gate. Log to `reviews/stageN.md`. Fix and re-review on FAI
   Day 5, not blocking.
 
 ### Stage 4 — Seed-free ablation (Day 4) — **the headline**
+> **Did not run** (superseded, see the top-of-document note): no `results/ablation_seeds.json`
+> exists, and the seed-free ablation is not this paper's headline — the judge-reliability finding
+> (§11) is. Kept below for history, not as an open task.
 - **Agent tasks:** implement workspace-derived seed generation (read candidate framings from
   the probe/logit-lens signal; fall back to a minimal generic seed if empty), then run the
   ablation: full human seeds → 5 seeds → **0 human seeds**. This is the plot the preprint
@@ -221,6 +236,13 @@ Run `/review` at each gate. Log to `reviews/stageN.md`. Fix and re-review on FAI
 - **Exit:** `results/ablation_seeds.json` + the plot.
 
 ### Stage 5 — Full runs + baselines (Day 5)
+> **Ran in reduced form, not as specified below** (superseded, see the top-of-document note): no
+> `results/main_table.json` exists and neither method ran on 50 (or even the later-locked 25)
+> behaviors. What actually shipped is the `n=5`-per-condition pool-12 comparison
+> (`results/*_smoke_pool12.json`, both targets) reported in `paper/paper.tex` §5 — the free-tier
+> compute budget was exhausted before the full matrix could run (README.md's "Scale, stated
+> plainly"). The 👤 hand-validation checklist item below is still the real, executed practice
+> (that's how the judge incident, §11, was caught) — only the "50 behaviors" scale is stale.
 - **Agent tasks:** run **your method** and the **GPTFuzzer baseline** (and AutoDAN if time)
   on all 50 behaviors, *identical* judge/budget/decoding — this is the only valid way to
   compare (you cannot borrow numbers from the papers). Collect ASR, queries-to-success,
@@ -236,6 +258,12 @@ Run `/review` at each gate. Log to `reviews/stageN.md`. Fix and re-review on FAI
 - **Exit:** `results/main_table.json` populated and cross-checked.
 
 ### Stage 6 — local transfer + interpretability panels (Day 6)
+> **Did not run** (superseded, see the top-of-document note): no `results/*transfer*` file
+> exists, RQ3 transfer does not appear in `paper/paper.tex`, and none of the 7 figures below were
+> built (the paper's tables are hand-assembled from `results/*.json`, not `make figures`
+> output — README.md confirms `make_figures.py` "is not implemented"). `Phi-3.5-mini-instruct`
+> ended up in the paper as the rubric LLM judge instead (`scripts/judge.py`), a different role
+> than the transfer target described here. Kept below for history, not as an open task.
 - **Agent tasks:** replay the optimized prompts on a second small open-weight model **locally on Kaggle** (Phi-3.5-mini, black-box),
   log transfer ASR; generate the qualitative logit-lens/probe readout panels (success vs.
   failure) that a scalar-probe method can't produce.

@@ -12,8 +12,11 @@ rubric) is now the actual success determinant — `hubert233/GPTFuzz` is kept on
 comparability, not trusted as ground truth; (2) activation-guided mutation shows no consistent
 ASR advantage over uniform mutation, an honest null result, mechanistically explained by
 refusal-direction separation quality differing across targets. Targets:
-`Qwen2.5-3B-Instruct` (control) and `Phi-4-mini-instruct` (treatment); RQ3 transfer replays
-optimized prompts on `Phi-3.5-mini-instruct`. Benchmark: AdvBench behaviors. **Every reported
+`Qwen2.5-3B-Instruct` (control) and `Phi-4-mini-instruct` (treatment); `Phi-3.5-mini-instruct` is
+the rubric-based LLM judge (`scripts/judge.py`), not an attack target — PLAN.md's original "RQ3
+transfer" plan (replaying optimized prompts on a third model) never ran (no `results/*transfer*`
+file exists) and does not appear in the paper; do not describe it as part of this project's
+scope. Benchmark: AdvBench behaviors. **Every reported
 result is smoke-scale (`n=5` behaviors per condition, single seed)** — the originally planned
 full evaluation (25 behaviors × 3 seeds × 2 targets; `PLAN.md`'s "50 behaviors" framing predates
 this and is superseded) did not run; free-tier compute was exhausted first. See `README.md`'s
