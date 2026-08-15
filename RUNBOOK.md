@@ -264,29 +264,38 @@ PLAN.md §11's **DECIDED reframe**:
 
 0. [L] `make release` — runs tests, the raw-text content scan
    (`scripts/check_no_raw_text.py`, `reviews/stage7.md`), and prints every remaining
-   `[DRAFT FLAG]` in `paper/paper.md` plus a manual checklist (CI green, Gate 7 signed off,
-   no unresolved disclosure flag). It does **not** tag for you — read its output, confirm each
-   item, then continue. `scripts/assemble_paper.py` still doesn't exist (`make paper` still
-   fails) — `paper/paper.md` itself was assembled by hand from `results/*.json`, not by a
-   script, and that hasn't changed. What *has* changed: PDF conversion (below) now does.
+   `DRAFT FLAG` in `paper/paper.tex` (the submission artifact) and `paper/paper.md` (the
+   markdown source of record it was derived from — the two should agree) plus a manual
+   checklist (CI green, Gate 7 signed off, no unresolved disclosure flag). It does **not** tag
+   for you — read its output, confirm each item, then continue. `scripts/assemble_paper.py`
+   still doesn't exist (`make paper` still fails) — `paper/paper.md` itself was assembled by
+   hand from `results/*.json`, not by a script, and that hasn't changed.
 
-1. [L] `python scripts/build_paper_pdf.py` — converts the already-written `paper/paper.md` to
-   `paper/paper.pdf` via pandoc + xelatex (single-column academic layout, title/author/abstract
-   on the title page, numbered sections, references). Requires `pandoc` and `xelatex` on PATH.
-   Self-verifies afterward that every `§`-cross-reference, `[REDACTED ...]` marker, and
-   `[DRAFT FLAG]` in the source survived into the rendered PDF text — fails loudly rather than
-   silently shipping a PDF with dropped content. LaTeX-layer fixes (a missing bold-glyph
-   mapping, wide-table shrinking) live in `paper/pandoc-header.tex`, not in `paper.md` itself.
-   Known residual cosmetic issue: ~4 table cells with very long `results/*.log` file paths
-   overflow their column by up to ~0.22in (text is still fully legible, not cut off) — reducing
-   this further would require editing table content, which the build script deliberately
-   doesn't do. Re-run this script any time `paper/paper.md` changes; it's not run in CI (needs
-   a full TeX install).
+1. [L] `paper/paper.tex` is the canonical submission source (LaTeX-native, converted by hand
+   from `paper/paper.md` and numerically re-verified against `results/*.json` — see
+   `reviews/stage7.md`). Build the PDF directly:
+   ```bash
+   cd paper && pdflatex -interaction=nonstopmode paper.tex \
+     && biber paper \
+     && pdflatex -interaction=nonstopmode paper.tex \
+     && pdflatex -interaction=nonstopmode paper.tex
+   ```
+   Requires `pdflatex` and `biber` on PATH (any recent TeX Live install has both). Confirm zero
+   LaTeX errors and zero unresolved `\cref`/`\cite` warnings in `paper/paper.log` before
+   proceeding — `grep -i "undefined" paper/paper.log` should return nothing. Re-run any time
+   `paper/paper.tex` or `paper/references.bib` changes; not run in CI (needs a full TeX
+   install). Known residual cosmetic issue: a handful of `Overfull \hbox` warnings remain in
+   table cells with long file-path tokens (text is still fully legible, not cut off).
+   `scripts/build_paper_pdf.py` (pandoc + xelatex, building directly from `paper/paper.md`) is
+   an older, superseded pipeline kept for reference — do not use it for the release PDF, it
+   will not reflect the LaTeX-only fixes and citations now in `paper.tex`.
 2. [B] https://arxiv.org -> login/register (institutional email helps).
 3. [B] **Endorsement gotcha:** first-time `cs.CR`/`cs.CL` authors may need an endorsement
    (https://arxiv.org/help/endorsement). Arrange it early so it doesn't block you.
-4. [B] **Submit -> Start New Submission** -> primary `cs.CR`, cross-list `cs.CL` -> upload PDF/LaTeX
-   -> title/abstract/authors -> **Preview -> Submit**. Announced next business day.
+4. [B] **Submit -> Start New Submission** -> primary `cs.CR`, cross-list `cs.CL` -> upload the
+   LaTeX source (`paper/paper.tex`, `paper/references.bib`, and the compiled `.bbl`, since
+   arXiv's TeX Live version may not match your local `biber` output) -> title/abstract/authors
+   -> **Preview -> Submit**. Announced next business day.
 5. [B] **Send the recorded disclosure notices now** (`paper/paper.md` §7): MSRC (for
    Phi-4-mini-instruct, Phi-3.5-mini-instruct) and Alibaba/Qwen (for Qwen2.5-3B-Instruct) — the
    plan says "at the time of arXiv posting," so this is that time. Record the actual send

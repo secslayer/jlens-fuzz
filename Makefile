@@ -55,7 +55,9 @@ release:
 	@echo "=== 2/4: no raw jailbreak/completion text under results/ (reviews/stage7.md) ==="
 	$(PY) scripts/check_no_raw_text.py
 	@echo ""
-	@echo "=== 3/4: DRAFT FLAGs remaining in paper/paper.md -- read each, confirm acceptable for v1 ==="
+	@echo "=== 3/4: DRAFT FLAGs remaining in paper/paper.tex (the submission artifact) -- read each, confirm acceptable for v1 ==="
+	@grep -n "DRAFT" paper/paper.tex || echo "(none found)"
+	@echo "--- paper/paper.md (source of record; should match the above) ---"
 	@grep -n "DRAFT FLAG" paper/paper.md || echo "(none found)"
 	@echo ""
 	@echo "=== 4/4: manual confirmations before tagging ==="
