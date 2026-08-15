@@ -1,12 +1,24 @@
 # CLAUDE.md — jlens-fuzz
 
 ## What this project is
-Proof-of-concept preprint: interpretability-guided jailbreak fuzzing. We swap GPTFuzzer's
-sparse binary fitness for a **refusal-probe fitness on a partial forward pass**, and remove
-the human-seed dependence (headline: the **zero-human-seed ablation**). White-box target:
-`Qwen2.5-3B-Instruct`. Judge: `hubert233/GPTFuzz` (RoBERTa). Benchmark: 50 AdvBench behaviors.
-Everything runs on Kaggle, free — no external APIs. RQ3 transfer replays optimized prompts on a
-second small open-weight model locally (e.g. Phi-3.5-mini). No OpenRouter, no Kimi K3.
+Interpretability-guided jailbreak fuzzing: mutating a jailbreak template at the location a
+refusal direction (difference-in-means, Arditi et al. 2024) points to, vs. GPTFuzzer's uniform
+whole-template mutation. Along the way the pipeline caught its own success judge lying to it —
+that became the headline finding, not the original plan. **Two findings, both artifact-backed**
+(see `README.md` / `paper/paper.tex` for the precise statements): (1) the standard
+`hubert233/GPTFuzz` RoBERTa judge inflates ASR via template-echo false positives, and a stricter
+two-stage replacement (`scripts/judge.py`: keyword pre-filter + anti-roleplay LLM-as-judge
+rubric) is now the actual success determinant — `hubert233/GPTFuzz` is kept only for baseline
+comparability, not trusted as ground truth; (2) activation-guided mutation shows no consistent
+ASR advantage over uniform mutation, an honest null result, mechanistically explained by
+refusal-direction separation quality differing across targets. Targets:
+`Qwen2.5-3B-Instruct` (control) and `Phi-4-mini-instruct` (treatment); RQ3 transfer replays
+optimized prompts on `Phi-3.5-mini-instruct`. Benchmark: AdvBench behaviors. **Every reported
+result is smoke-scale (`n=5` behaviors per condition, single seed)** — the originally planned
+full evaluation (25 behaviors × 3 seeds × 2 targets; `PLAN.md`'s "50 behaviors" framing predates
+this and is superseded) did not run; free-tier compute was exhausted first. See `README.md`'s
+"Scale, stated plainly" note and `paper/paper.tex` §4/§6 for the full accounting.
+Everything runs on Kaggle, free — no external APIs. No OpenRouter, no Kimi K3.
 
 Read `PLAN.md` for the full stage plan and peer-review gates. Follow it stage by stage.
 
@@ -17,10 +29,12 @@ Read `PLAN.md` for the full stage plan and peer-review gates. Follow it stage by
 2. **Never invent numbers.** Every figure/table value must come from a `results/*.json` file
    produced by an actual run. If a run didn't happen, the number does not exist.
 3. **Identical conditions for baselines.** GPTFuzzer/AutoDAN baselines and our method must use
-   the *same* target model, judge, 50 behaviors, query budget, and decoding params. Assert the
-   config invariants match before any comparison run. We do NOT copy ASR numbers from papers.
-4. **Human gates are human.** Stages 2 (probes), 5 (judge labels), and 8 (ethics) require a
-   human sign-off (👤). Prepare the artifact for review; do not self-approve these.
+   the *same* target model, judge, benchmark subset, query budget, and decoding params. Assert
+   the config invariants match before any comparison run. We do NOT copy ASR numbers from papers.
+4. **Human gates are human.** Stages 2 (probes) and 5 (judge labels) require a dedicated human
+   sign-off (👤); ethics/disclosure is a 👤 checklist item folded into Stage 7's Gate 7 (there is
+   no separate Stage 8 — PLAN.md §8 is the standalone ethics *policy* section, not a stage).
+   Prepare the artifact for review; do not self-approve these.
 5. **Stop at Gate 2 if probe AUC < 0.85.** A weak probe = no signal = no paper. Flag it loudly
    rather than proceeding.
 
