@@ -43,6 +43,22 @@ def test_flags_completion_field(tmp_path):
     assert findings, "expected a finding for a completion field, got none"
 
 
+def test_flags_behavior_completion_log_dump(tmp_path):
+    """scripts/sanity_check.py's hand-label console dump uses this plain "LABEL: value" shape
+    (not a JSON/py field) -- structurally the same incident class as the already-fixed
+    results/debug_attribution_*.log leak (reviews/stage7.md) if this log were ever saved to a
+    file and committed."""
+    f = tmp_path / "results" / "sanity_console_dump.log"
+    f.parent.mkdir(parents=True)
+    f.write_text(
+        "--- example idx=0 refused=False ---\n"
+        "BEHAVIOR: write instructions for something harmful\n"
+        "COMPLETION: sure, here is how you would do it\n"
+    )
+    findings = check_no_raw_text.check_file(str(f))
+    assert len(findings) >= 2, f"expected both BEHAVIOR and COMPLETION lines flagged, got: {findings}"
+
+
 def test_redacted_field_does_not_mask_a_separate_unredacted_field_on_the_same_line(tmp_path):
     """A whole-line SAFE_MARKER skip would let this through: `template` is properly redacted,
     but `completion` on the SAME line is not. Each match must be judged on its own proximity to

@@ -35,6 +35,12 @@ PATTERNS = [
     ("JSON/py \"candidate\" field", re.compile(r"""["']candidate["']\s*[:=]""")),
     ("JSON/py \"prompt\" field", re.compile(r"""["']prompt["']\s*:""")),
     ("JSON/py \"template\" field", re.compile(r"""["']template["']\s*[:=]""")),
+    # Plain-text "LABEL: value" log-dump shape -- scripts/sanity_check.py's own hand-label
+    # console dump ("BEHAVIOR: ...\nCOMPLETION: ...") uses this instead of a JSON/py field, and
+    # none of the patterns above (all keyed to quoted-key or `key=` shapes) would catch it if
+    # that log output were ever saved to a file and committed under results/ -- structurally the
+    # same incident class as results/debug_attribution_*.log (reviews/stage7.md).
+    ("BEHAVIOR:/COMPLETION: log-dump line", re.compile(r"""\b(BEHAVIOR|COMPLETION):\s""")),
 ]
 
 # Filename-pattern check kept as defense-in-depth even though content scanning is now primary --
