@@ -121,7 +121,9 @@ def main():
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     os.makedirs(os.path.dirname(flips_out) or ".", exist_ok=True)
 
-    judge_llm_tok, judge_llm_model = judge_mod.load_judge_llm(cfg["judge_llm_model"], device)
+    judge_llm_tok, judge_llm_model, judge_device = judge_mod.load_judge_llm(
+        cfg["judge_llm_model"], device
+    )
 
     per_behavior_old = {}
     per_behavior_new = {}
@@ -147,7 +149,9 @@ def main():
             continue
 
         n_judged += 1
-        verdict = judge_mod.judge_success(candidate, completion, judge_llm_tok, judge_llm_model, device)
+        verdict = judge_mod.judge_success(
+            candidate, completion, judge_llm_tok, judge_llm_model, judge_device
+        )
         new_success = verdict["success"]
 
         old_success_count += int(old_success)
