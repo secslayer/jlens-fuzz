@@ -45,8 +45,11 @@ Read `PLAN.md` for the full stage plan and peer-review gates. Follow it stage by
 - `PLAN.md` — the plan + gates (source of truth).
 - `Makefile` — one target per stage.
 - `configs/exp.yaml` — the invariants (model, judge, budget, seed). Everything reads this.
-- `scripts/` — stage scripts (`train_probes.py`, loop, metrics, figures, transfer).
-- `results/` — one JSON per run; the only input to `make figures`.
+- `scripts/` — stage scripts (`train_probes.py`, `run_fuzz.py`, `judge.py`, `extract_direction.py`,
+  `check_no_raw_text.py`, ...). `make_figures.py`/`assemble_paper.py`/`transfer_blackbox.py` are
+  declared in `experiments.yaml` but not yet built — see `ORCHESTRATION.md`'s top note.
+- `results/` — one JSON per run; the intended sole input to a future `make figures` (not yet
+  built — see above; `paper/paper.tex` was assembled by hand instead).
 - `reviews/` — peer-review logs (`stageN.md`), written by the reviewer subagent.
 - `.claude/agents/reviewer.md` — adversarial peer-review subagent.
 
