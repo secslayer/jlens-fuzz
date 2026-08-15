@@ -49,6 +49,12 @@ def tracked_results_files():
     return [line for line in out.splitlines() if line]
 
 
+# How far past a matched field name to look for the redaction marker before deciding this
+# specific occurrence is safe. Must comfortably cover `='[REDACTED ... fragment]'` /
+# `: "[REDACTED ... fragment]"` wrapping -- SAFE_MARKER itself is ~41 chars.
+MARKER_PROXIMITY_CHARS = 80
+
+
 def check_file(path):
     findings = []
     for fp in FILENAME_PATTERNS:
@@ -57,10 +63,15 @@ def check_file(path):
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
             for lineno, line in enumerate(f, start=1):
-                if SAFE_MARKER in line:
-                    continue
                 for label, pat in PATTERNS:
-                    if pat.search(line):
+                    for m in pat.finditer(line):
+                        # Check proximity to THIS match, not marker-presence anywhere in the
+                        # line -- a line can legitimately hold one redacted field (e.g.
+                        # "template") next to a separate, unredacted one (e.g. "completion");
+                        # a whole-line skip would silently miss the second field entirely.
+                        window = line[m.end():m.end() + MARKER_PROXIMITY_CHARS]
+                        if SAFE_MARKER in window:
+                            continue
                         findings.append((path, lineno, f"[{label}] {line.strip()[:160]}"))
     except (FileNotFoundError, IsADirectoryError, PermissionError):
         pass
