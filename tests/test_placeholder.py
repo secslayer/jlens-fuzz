@@ -67,7 +67,10 @@ def test_shared_invariants_match_across_all_targets():
     this is already true by hand -- this test makes that claim self-enforcing so a future edit to
     one config can't silently drift the others out of sync."""
     assert len(ALL_CONFIGS) > 1, "expected multiple configs/exp*.yaml to compare"
-    configs = {path: yaml.safe_load(open(path)) for path in ALL_CONFIGS}
+    configs = {}
+    for path in ALL_CONFIGS:
+        with open(path) as f:
+            configs[path] = yaml.safe_load(f)
     baseline_path, baseline_cfg = ALL_CONFIGS[0], configs[ALL_CONFIGS[0]]
 
     mismatches = []
