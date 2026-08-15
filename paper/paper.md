@@ -2,6 +2,7 @@
 title: >
   Judge-Shaped, Not Harm-Shaped: A Persistent Measurement-Validity Failure in Jailbreak
   Success Judges, and an Honest Null Result for Activation-Guided Mutation
+author: Muhammed Muiz Arummal, Independent Researcher
 status: >-
   DRAFT — reviewed three times (reviews/stage7.md), Gate 7 signed off 2026-08-08
   (reviews/stage7-human-signoff.md), numerically re-verified and converted to LaTeX 2026-08-09
@@ -258,7 +259,10 @@ valid if judge, benchmark, budget, and decoding parameters are held fixed.
 **Benchmark and budget.** 5 behaviors per condition sampled from the canonical AdvBench CSV
 (`llm-attacks/llm-attacks`), `query_budget=40` full-generation queries per behavior,
 `max_iterations=100`, `decode_temperature=0.7`, `decode_top_p=0.9` — identical across every
-condition reported (`configs/exp.yaml`, `configs/exp_phi4mini.yaml`).
+condition reported (`configs/exp.yaml`, `configs/exp_phi4mini.yaml`). `max_iterations` is
+non-binding under `--fitness judge`: every iteration is a full query, so the loop always hits
+the `query_budget=40` cap (or succeeds) well before it could reach iteration 100; the effective
+per-behavior bound throughout this paper is `query_budget`, not `max_iterations`.
 
 **Seed-pool subsampling (`seed_pool_size=12`).** We found, via a debug-logging pass over the
 UCB1 pool-selection trace, that the original 77-template seed pool exceeds `query_budget=40`:
@@ -388,22 +392,42 @@ unconfirmed:
   is 0 in both. `find_attribution_span()` successfully located a real mutation span on every
   single iteration of every guided run reported here; the null above is not explained by guided
   mutation quietly degrading to uniform mutation under the hood.
-- **Tree search genuinely engages** (the fix in §4 working as intended). `n_mutated_child_selected`
-  is 54 (Qwen `ours`), 80 (Qwen `gptfuzzer`), 80 (Phi `ours`), 80 (Phi `gptfuzzer`) — all four runs
-  spend a substantial fraction of their budget revisiting/refining previously-mutated pool nodes,
-  not just replaying the 12 original seeds (`n_original_selected` 113/120/120/120 respectively —
-  note `n_original_selected + n_mutated_child_selected` should sum to each run's
-  `full_forward_passes`; Qwen `ours`' 113+54=167 checks out exactly, confirming these counters are
-  internally consistent). This directly answers the question the seed-pool fix (§4) set out to
-  answer: at pool-12, real UCB1 tree search is happening, on both methods, in every reported run.
+- **Tree search genuinely engages** (the fix in §4 working as intended). Every run's
+  `n_original_selected` and `n_mutated_child_selected` were re-verified directly against their
+  source JSON files: Qwen `ours` 113/54, Qwen `gptfuzzer` 120/80, Phi `ours` 120/80, Phi
+  `gptfuzzer` 120/80 — and every pair sums exactly to that run's own `full_forward_passes`
+  (Qwen `ours` 113+54=167; the other three, 120+80=200 each). All four runs spend a substantial
+  fraction of their budget revisiting/refining previously-mutated pool nodes, not just replaying
+  the 12 original seeds. **Qwen `ours`' lower total (167, vs. 200 for the other three) is not an
+  inconsistency**: it reflects early stopping on success, not a different `query_budget` — all
+  four runs share the identical `query_budget=40 × 5 behaviors = 200`-query cap (§4), but Qwen
+  `ours` is the only one of the four with any successes (2/5 raw), and a behavior's search stops
+  the moment it succeeds rather than continuing to the cap. Concretely,
+  `results/ours_smoke_pool12.json`'s own `queries_to_success` field records successes at queries
+  17 and 30 for two behaviors, with the remaining three running the full 40-query cap each:
+  `17 + 40 + 40 + 40 + 30 = 167`, exactly matching the reported `full_forward_passes`. The other
+  three runs (all `asr=0.0`) never stop early, so every one of their five behaviors runs the full
+  40-query cap: `5 × 40 = 200`. This directly answers the question the seed-pool fix (§4) set out
+  to answer: at pool-12, real UCB1 tree search is happening, on both methods, in every reported
+  run.
   A separate, independently-collected 2-behavior `--debug-attribution` diagnostic run (below) shows
-  the first `MUTATED_CHILD` pool selection firing at **iteration 24** on Qwen
-  (`results/debug_attribution_qwen.log`, `behavior_idx=1`) — matching, to the exact iteration, the
-  worst-case prediction from §4's standalone `select_ucb1`/`backpropagate` simulation. The
-  independent Phi debug run shows the identical pattern: first `MUTATED_CHILD` also at
-  **iteration 24** (`results/debug_attribution_phi.log`, `behavior_idx=0`). This is independent
-  corroboration, from two real runs on two different targets, of a claim §4 previously supported
-  only with a synthetic simulation.
+  the first `MUTATED_CHILD` pool selection firing at **iteration 24** on *both* targets: Qwen
+  (`results/debug_attribution_qwen.log`, `behavior_idx=1`) and Phi
+  (`results/debug_attribution_phi.log`, `behavior_idx=0`) — re-verified by grepping both logs
+  directly, not assumed from a prior draft. **This is not a coincidence**: both examined behaviors
+  have zero successes throughout their own search (Qwen's debug run succeeds only on
+  `behavior_idx=0`, at iteration 17 — not the `behavior_idx=1` examined here; Phi's debug run has
+  `asr=0.0` throughout), so both searches are governed purely by UCB1's explore term under zero
+  reward. Given identical `seed_pool_size=12` and identical deterministic tie-breaking (unvisited
+  nodes first, ties broken by lowest pool index) on both targets, the same zero-reward dynamics
+  necessarily produce the same transition point: iterations 0–11 visit each of the 12 original
+  seeds once; iterations 12–23 revisit them a second time (originals still win ties over children
+  by lower index); by iteration 24 the originals have accumulated more visits than any child, so a
+  child's larger explore bonus (fewer visits, same zero reward) finally wins. This matches, to the
+  exact iteration and for an explained reason rather than by chance, the worst-case prediction
+  from §4's standalone `select_ucb1`/`backpropagate` simulation — independent corroboration, from
+  two real runs on two different targets, of a claim §4 previously supported only with a
+  synthetic simulation.
 
 **Attribution quality: real, quantified, and *not* uniform (corrected from an earlier draft).**
 An earlier version of this section claimed attribution "localizes to refusal-relevant tokens,"
@@ -631,4 +655,5 @@ to the author/year/venue/arXiv-ID facts verified above) still need to be pulled 
 | Pool-77 postfix Qwen 0.4/0.4 | — | — | **No backing file in this repository; PI-reported only** |
 | §5.3 attribution-quality examples + sum_score ranges (Qwen 40.0–116.0/82.6, Phi 51.7–87.2/65.8) | `results/debug_attribution_qwen.log`, `results/debug_attribution_phi.log` | `top-10 tokens`/`selected span` lines (assembled span `text=` field redacted per `/review 7`; token/score/index fields unredacted), `sum_score=` values | Artifact-backed (console log, committed verbatim); superseded an earlier unbacked chat-excerpt claim |
 | First `MUTATED_CHILD` selection at iteration 24 (Qwen) | `results/debug_attribution_qwen.log` | `behavior_idx=1` iteration-24 `pool_select` line | Artifact-backed |
-| select_ucb1/backpropagate tree-search-engagement proof (synthetic) | (verbatim-extracted, run standalone, not itself a committed artifact) | — | Reproducible from `scripts/run_fuzz.py` source; not a `results/*.json` fact; independently corroborated by the real iteration-24 log line above |
+| First `MUTATED_CHILD` selection at iteration 24 (Phi) | `results/debug_attribution_phi.log` | `behavior_idx=0` iteration-24 `pool_select` line | Artifact-backed; re-verified for this revision, previously reported in body text but not itself listed as a row here |
+| select_ucb1/backpropagate tree-search-engagement proof (synthetic) | (verbatim-extracted, run standalone, not itself a committed artifact) | — | Reproducible from `scripts/run_fuzz.py` source; not a `results/*.json` fact; independently corroborated by the real iteration-24 log lines above, now for both targets |
