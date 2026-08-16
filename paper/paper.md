@@ -162,24 +162,6 @@ under-examined in this literature — direct evidence that the fix's own output 
 same failure class, from our own pipeline's real generations rather than a constructed
 adversarial example.
 
-**Convergent evidence outside jailbreak evaluation.** The same design principle — that a generic
-LLM-as-judge should not be trusted without validating it against human judgment, and that a
-task-specific rubric judge measurably improves that agreement — appears independently in an
-unrelated domain. Falck et al. [2026, arXiv:2608.13331] train an agent to replicate results
-figures from published ML/AI-for-science papers, and find that their auto-generated per-task
-rubric judge correlates more closely with expert-human rankings (Kendall τ = 0.19) than a generic
-constant-prompt baseline judge run on the same rollouts (Kendall τ = 0.15), with multi-sample
-averaging of the judge further reducing judge-induced noise. This is not evidence about jailbreak
-judges specifically, but it is an independent, cross-domain data point for the same conclusion
-this paper reaches by a different route (a hand-verified case study rather than a Kendall-τ
-comparison, §5.1): judge design and human calibration are not incidental engineering choices, they
-measurably change what a pipeline reports as success. Separately, Falck et al.'s framing of a
-faithful, budget-constrained scaled-down replication as a legitimate target to reward — rather
-than a shortcoming to be hidden — is directly relevant to this project's own compute accounting
-(§4, §6): every result in this paper is smoke-scale for the same underlying reason (free-tier
-compute exhausted before the originally planned full evaluation ran), stated plainly rather than
-disguised as something larger.
-
 ## 3. Method
 
 **Pipeline overview.** `scripts/run_fuzz.py` implements a single fuzzing loop parameterized by
@@ -642,23 +624,16 @@ run: the full 25-behavior × 3-seed matrix (§4, §6), with the corrected judge,
   planning docs). arXiv:2605.28553, 2026.
 - Gao, Y. "How Reliable Is Your Jailbreak Judge? Calibration and Adversarial Robustness of
   Automated ASR Scoring." arXiv:2606.25487, 2026.
-- Falck, D., Sabri, S., Surina, A., Foster, T., Sims, A., Devlin, S., Rogers, D., Collins, T.,
-  Aleksiev, K., Kirsch, L., Hughes, E. "Training AI Scientists to Replicate Research."
-  arXiv:2608.13331, 2026.
 
-All 9 arXiv IDs in the jailbreak/interpretability cluster above (plus `hubert233/GPTFuzz`, the
-HuggingFace model ID cited throughout the body — confirmed to be a real, public, MIT-licensed
-RoBERTa classifier) were re-verified live against arxiv.org: title, full author list, and posting
-year all confirmed to match exactly. Two corrections made from this pass: AutoDAN (ICLR 2024) and
-"Not Aligned" is Not "Malicious" (COLING 2025) are peer-reviewed publications, not arXiv-only
-preprints, and their venue is now noted; the "How Reliable Is Your Jailbreak Judge?" citation
-previously read "Gao, Y. et al." but is a solo-authored paper (Yang Gao, Veyon Solutions) —
-corrected to drop "et al." here and in the §2 in-text citation. The 10th citation (Falck et al.)
-was verified differently — its author list, title, and the two Kendall-τ figures cited in §2 were
-read directly from the primary PDF (arxiv.org/pdf/2608.13331), not from the arxiv.org abstract page
-the other 9 were checked against; noted here so the two verification methods aren't conflated.
-**[DRAFT FLAG]**: page numbers and full BibTeX-formatted entries (as opposed to the
-author/year/venue/arXiv-ID facts verified above) still need to be pulled before submission.
+All 9 arXiv IDs above (plus `hubert233/GPTFuzz`, the HuggingFace model ID cited throughout the
+body — confirmed to be a real, public, MIT-licensed RoBERTa classifier) were re-verified live
+against arxiv.org: title, full author list, and posting year all confirmed to match exactly.
+Two corrections made from this pass: AutoDAN (ICLR 2024) and "Not Aligned" is Not "Malicious"
+(COLING 2025) are peer-reviewed publications, not arXiv-only preprints, and their venue is now
+noted; the "How Reliable Is Your Jailbreak Judge?" citation previously read "Gao, Y. et al." but
+is a solo-authored paper (Yang Gao, Veyon Solutions) — corrected to drop "et al." here and in the
+§2 in-text citation. **[DRAFT FLAG]**: page numbers and full BibTeX-formatted entries (as opposed
+to the author/year/venue/arXiv-ID facts verified above) still need to be pulled before submission.
 
 ## Appendix A — Full provenance table
 
