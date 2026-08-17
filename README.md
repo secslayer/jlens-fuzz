@@ -46,11 +46,15 @@ done to study a measurement problem (judge reliability), not to produce a usable
   verification trail.
 - Anyone needing to verify a specific claim must regenerate it themselves from the committed
   code, config, and public benchmark — this repo does not ship a copy of what was generated.
-- Full policy: `PLAN.md` §8 and `paper/paper.md` §7 (Ethics and Responsible Disclosure). Disclosure
-  plan (recorded decision, not yet executed): notices to Microsoft (MSRC — Phi-4-mini-instruct,
-  Phi-3.5-mini-instruct) and Alibaba/Qwen (Qwen2.5-3B-Instruct) at the time of arXiv posting.
-  **Gate 7 (`reviews/stage7.md`) is currently FAIL, pending required human 👤 sign-off** — do
-  not treat this work as public-ready until that sign-off happens.
+- Full policy: `PLAN.md` §8 and `paper/paper.md` §7 (Ethics and Responsible Disclosure).
+  **Gate 7 is SIGNED OFF** (`reviews/stage7-human-signoff.md`, 2026-08-08; the FAIL verdict in
+  `reviews/stage7.md` is the pre-sign-off historical record, not the current state).
+  **This repo was made public on 2026-08-17** (Gate 8, Communicate) — ahead of the disclosure
+  plan's original "at arXiv posting" trigger; see
+  `reviews/disclosure-timing-decision-2026-08-17.md` for the recorded reasoning. **Disclosure
+  notices to Microsoft (MSRC — Phi-4-mini-instruct, Phi-3.5-mini-instruct) and Alibaba/Qwen
+  (Qwen2.5-3B-Instruct) have not yet been sent** and are now overdue relative to PLAN.md §8's
+  "before publicizing" bar — this is a known, recorded gap, not an oversight.
 
 ## Reproduction
 

@@ -8,8 +8,9 @@ status: >-
   (reviews/stage7-human-signoff.md), numerically re-verified and converted to LaTeX 2026-08-09
   (paper/paper.tex compiles clean — zero LaTeX errors, zero unresolved \cref/\cite warnings —
   this markdown file is the source of record it was derived from, not the submission artifact
-  itself). pre-arXiv. Not yet posted or tagged; disclosure to MSRC/Alibaba (§7) is planned for
-  posting time, not yet sent.
+  itself). pre-arXiv, not yet posted or tagged. GitHub repo made public 2026-08-17, ahead of
+  arXiv posting (recorded decision: reviews/disclosure-timing-decision-2026-08-17.md); disclosure
+  to MSRC/Alibaba (§7) has not yet been sent and is now overdue relative to PLAN.md §8.
 date: 2026-08-09
 ---
 
@@ -569,13 +570,14 @@ targeting AdvBench behaviors, some of which concern self-harm and other sensitiv
   itself proves useful as an attack method. We suggest this as a concrete defensive application
   of the same interpretability signal studied here.
 - **Disclosure.** Per PLAN.md's own §8 (its ethics gate), disclosure to the affected open-weight
-  model maintainers must happen before this paper is made public. **Recorded decision**:
-  disclosure notices will be sent to Microsoft (MSRC, for Phi-4-mini-instruct and
-  Phi-3.5-mini-instruct) and to Alibaba/Qwen (for Qwen2.5-3B-Instruct) at the time of arXiv
-  posting, consistent with responsible-disclosure norms for open-weight models tested with
-  published techniques. This is a stated plan tied to a concrete trigger (arXiv posting), not an
-  open-ended action item — update this paragraph with the actual outcome (dates sent,
-  acknowledgment received, if any) once posting happens.
+  model maintainers must happen before this work is made public. **The original plan tied
+  disclosure to arXiv posting; that plan has been superseded.** The GitHub repository
+  (`github.com/secslayer/jlens-fuzz`) was made public on 2026-08-17, ahead of arXiv posting — a
+  deliberate, recorded human decision (`reviews/disclosure-timing-decision-2026-08-17.md`), not a
+  silent deviation. **Disclosure notices to Microsoft (MSRC, for Phi-4-mini-instruct and
+  Phi-3.5-mini-instruct) and to Alibaba/Qwen (for Qwen2.5-3B-Instruct) have not yet been sent** and
+  are now overdue relative to §8's "before publicizing" bar — update this paragraph with the
+  actual outcome (dates sent, acknowledgment received, if any) once sent.
 
 ## 8. Conclusion
 
