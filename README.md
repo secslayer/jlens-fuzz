@@ -26,6 +26,18 @@ every number traced to its source file, and is explicit about what's still a `DR
 (unresolved provenance gaps, pending disclosure) — read that status before citing anything from
 it.
 
+## Demo — why the null isn't a dead mechanism
+
+![UCB1 search dynamics: 12 seed templates, then mutated children entering at iteration 24](docs/ucb1_demo.gif)
+
+A null result only means something if the mechanism actually ran. This replays the search's own
+UCB1 tie-breaking under zero reward: iterations 0–11 visit each of the 12 seed templates once,
+12–23 revisit them, and at **iteration 24** a freshly mutated child — zero visits, same zero
+reward, therefore a larger exploration bonus — starts winning selection. That transition point was
+derived analytically in §5.3 *and* observed at exactly iteration 24 in two independent real runs on
+two different targets. Guided mutation was genuinely engaged; it just didn't reliably help
+(§5.2).
+
 ## Ethics
 
 This is red-teaming research on public benchmarks (AdvBench) against small open-weight models,

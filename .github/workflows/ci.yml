@@ -17,7 +17,9 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install CI-relevant deps
-        run: pip install pytest pyyaml
+        run: pip install pytest pyyaml ruff
+      - name: Lint
+        run: python -m ruff check .
       - name: Run tests
         run: python -m pytest -q
       - name: No raw jailbreak/completion text under results/ (reviews/stage7.md)
