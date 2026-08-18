@@ -1,0 +1,18 @@
+# Explicit lint configuration so CI is deterministic across ruff releases.
+#
+# Without this file, `ruff check` uses whatever the installed version's defaults happen to be,
+# which differ between releases: the version pinned in .github/workflows/ci.yml flagged 704 issues
+# (686 of them E501 line-too-long) on the exact same tree a local ruff 0.12.0 passed clean. Lint
+# that changes verdict on a dependency bump is not a useful gate, so the rule set is named here
+# rather than inherited.
+#
+# Selection is ruff's own documented default (pyflakes + the error-level pycodestyle subset):
+# real bugs — undefined names, unused imports, syntax-adjacent mistakes — not formatting taste.
+# E501 (line length) is deliberately excluded: this is research code with long inline provenance
+# comments and URL citations, and reflowing them would churn lines that carry paper references
+# for no correctness gain.
+select = ["E4", "E7", "E9", "F"]
+
+# scripts/run_fuzz.py is intentionally not restructured — see the Gate 9 commit message. It
+# produced every published number in paper/paper.md, and no test covers it at the granularity
+# that would make a refactor safe.

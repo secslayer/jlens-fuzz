@@ -17,7 +17,10 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install CI-relevant deps
-        run: pip install pytest pyyaml ruff
+        # ruff is version-pinned: its default rule set changes between releases, so an unpinned
+        # install makes lint pass or fail on dependency drift rather than on the code. Rule
+        # selection itself lives in ruff.toml.
+        run: pip install pytest pyyaml ruff==0.12.0
       - name: Lint
         run: python -m ruff check .
       - name: Run tests
