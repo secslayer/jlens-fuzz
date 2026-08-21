@@ -139,4 +139,14 @@ results/                               aggregate-only run outputs (raw prompts g
 
 ## License
 
-No `LICENSE` file exists yet. Do not treat this repo as licensed for reuse until one is added.
+[MIT](LICENSE) — code, configuration, scripts, and the committed `results/*.json` metrics.
+
+**Scope note.** MIT is a software licence and is meant here for the code and results artifacts.
+The paper itself (`paper/paper.md`, `paper/paper.tex`, `paper/paper.pdf`) is a separate work: it
+will carry whichever licence is selected at arXiv submission, and that choice governs reuse of the
+text and figures. Cite the paper via [`CITATION.cff`](CITATION.cff) rather than treating the prose
+as MIT-licensed.
+
+This does not license anything the repo deliberately withholds — no raw jailbreak strings or
+harmful completions are published here (see Ethics above), so there is nothing of that kind to
+reuse under any licence.
