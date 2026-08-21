@@ -11,8 +11,9 @@ status: >-
   prose or cut, not quietly dropped; paper/paper.tex compiles clean, 15 pages. This markdown file
   is the source of record; paper.tex is the submission artifact. GitHub repo made public
   2026-08-17 ahead of arXiv posting (recorded decision:
-  reviews/disclosure-timing-decision-2026-08-17.md). REMAINING BLOCKER — disclosure to
-  MSRC/Alibaba (§7) not confirmed sent; PLAN.md §8 requires it before publicizing.
+  reviews/disclosure-timing-decision-2026-08-17.md). Disclosure to MSRC and Alibaba/Qwen sent
+  2026-08-19, no acknowledgement received — §8 discharged. Remaining before arXiv: cs.CR
+  endorsement (required; no institutional affiliation) and a LICENSE file.
 date: 2026-08-09
 ---
 
@@ -569,10 +570,15 @@ targeting AdvBench behaviors, some of which concern self-harm and other sensitiv
   disclosure to arXiv posting; that plan has been superseded.** The GitHub repository
   (`github.com/secslayer/jlens-fuzz`) was made public on 2026-08-17, ahead of arXiv posting — a
   deliberate, recorded human decision (`reviews/disclosure-timing-decision-2026-08-17.md`), not a
-  silent deviation. **Disclosure notices to Microsoft (MSRC, for Phi-4-mini-instruct and
-  Phi-3.5-mini-instruct) and to Alibaba/Qwen (for Qwen2.5-3B-Instruct) have not yet been sent** and
-  are now overdue relative to §8's "before publicizing" bar — update this paragraph with the
-  actual outcome (dates sent, acknowledgment received, if any) once sent.
+  silent deviation. **Disclosure notices were sent to Microsoft (MSRC, for Phi-4-mini-instruct
+  and Phi-3.5-mini-instruct) and to Alibaba/Qwen (for Qwen2.5-3B-Instruct) as of 2026-08-19.**
+  Both were sent after the repository was made public rather than before, which is the deviation
+  recorded above. **No acknowledgement had been received from either vendor at the time of
+  writing.** We record this plainly rather than waiting on a reply: the obligation under §8 is to
+  notify affected maintainers, and non-response to a courtesy notice — which this is, since no
+  novel vulnerability is claimed and the techniques are published prior work — is common and does
+  not leave the notification incomplete. Should either vendor respond, this paragraph will be
+  updated with the outcome.
 
 ## 8. Conclusion
 

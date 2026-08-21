@@ -727,13 +727,18 @@ targeting AdvBench behaviors, some of which concern self-harm and other sensitiv
     independent of whether guided mutation itself proves useful as an attack method. We suggest
     this as a concrete defensive application of the same interpretability signal studied here.
   \item \textbf{Disclosure.} Per \texttt{PLAN.md}'s own Section 8 (its ethics gate), disclosure
-    to the affected open-weight model maintainers must happen before this paper is made public.
-    \textbf{Recorded decision}: disclosure notices will be sent to Microsoft (MSRC, for
-    Phi-4-mini-instruct and Phi-3.5-mini-instruct) and to Alibaba/Qwen (for Qwen2.5-3B-Instruct)
-    at the time of arXiv posting, consistent with responsible-disclosure norms for open-weight
-    models tested with published techniques. This is a stated plan tied to a concrete trigger
-    (arXiv posting), not an open-ended action item---update this paragraph with the actual
-    outcome (dates sent, acknowledgment received, if any) once posting happens.
+    to the affected open-weight model maintainers must happen before this work is made public.
+    The original plan tied disclosure to arXiv posting; that plan was superseded when the GitHub
+    repository was made public on 2026-08-17, a deliberate and separately recorded decision
+    (\texttt{reviews/disclosure-timing-decision-2026-08-17.md}).
+    \textbf{Disclosure notices were sent to Microsoft (MSRC, for Phi-4-mini-instruct and
+    Phi-3.5-mini-instruct) and to Alibaba/Qwen (for Qwen2.5-3B-Instruct) as of 2026-08-19}---after
+    the repository went public rather than before, which is the deviation recorded above.
+    \textbf{No acknowledgement had been received from either vendor at the time of writing.} We
+    record this plainly rather than waiting on a reply: the obligation is to notify affected
+    maintainers, and non-response to a courtesy notice---which this is, given that no novel
+    vulnerability is claimed and the techniques are published prior work---is common and does not
+    leave the notification incomplete.
 \end{itemize}
 
 \section{Conclusion}

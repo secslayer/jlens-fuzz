@@ -32,6 +32,27 @@ describing the judge-reliability and null-result findings) is publicly visible a
   decision; arXiv submission itself, `CITATION.cff`, `v1.0-arxiv` tag, `make release` (Stage 7's
   broader Exit condition, already noted as outstanding in `reviews/stage7-human-signoff.md`).
 
+## Outcome — recorded 2026-08-19
+
+Disclosure notices to **Microsoft (MSRC)** and **Alibaba/Qwen** were **sent on 2026-08-19**, two
+days after the repository went public. **No acknowledgement received from either vendor** as of
+this record.
+
+That closes the open action from this decision. It does not retroactively make the ordering
+correct: PLAN.md §8 says notify *before* publicizing, and the repo went public first. Both facts
+stay on the record — the deviation and its remedy — rather than the second being used to quietly
+erase the first.
+
+Non-response is not treated as a blocker. These were courtesy notifications claiming no novel
+vulnerability, using published techniques on a public benchmark; vendors routinely do not reply to
+such notices, and the §8 obligation is discharged by notifying, not by receiving an answer.
+
+**Open caveat worth naming:** MSRC has a documented intake (the Researcher Portal) and Alibaba has
+ASRC, but **no QwenLM model repository publishes a `SECURITY.md` or security address** (checked
+2026-08-18 across `QwenLM/Qwen`, `Qwen2.5`, `Qwen3`). If the Qwen notice went to an address that
+is not a monitored security channel, the notification may not have actually landed. Worth
+confirming the channel used, and re-sending via ASRC if it was a guessed address.
+
 ## Cross-references updated as a result
 
 - `README.md` — disclosure-plan line updated to note the repo went public 2026-08-17, ahead of the

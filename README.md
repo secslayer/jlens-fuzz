@@ -65,8 +65,10 @@ done to study a measurement problem (judge reliability), not to produce a usable
   plan's original "at arXiv posting" trigger; see
   `reviews/disclosure-timing-decision-2026-08-17.md` for the recorded reasoning. **Disclosure
   notices to Microsoft (MSRC — Phi-4-mini-instruct, Phi-3.5-mini-instruct) and Alibaba/Qwen
-  (Qwen2.5-3B-Instruct) have not yet been sent** and are now overdue relative to PLAN.md §8's
-  "before publicizing" bar — this is a known, recorded gap, not an oversight.
+  (Qwen2.5-3B-Instruct) were sent 2026-08-19**, after the repo went public rather than before —
+  that ordering is the recorded deviation. **No acknowledgement received from either vendor as of
+  this writing**, which is unremarkable for a courtesy notice claiming no novel vulnerability;
+  the §8 obligation is to notify, not to obtain a reply.
 
 ## Reproduction
 

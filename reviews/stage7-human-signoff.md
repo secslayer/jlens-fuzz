@@ -50,9 +50,11 @@ by this document, not by editing that history.
 
 ## What remains open (not gate-blocking, tracked for completeness)
 
-- Disclosure notices to MSRC and Alibaba/Qwen are **not yet sent** — due at arXiv posting time per
-  the recorded plan (`paper/paper.md` §7). Update this document and `paper/paper.md` §7 with the
-  actual send date/outcome when that happens.
+- ~~Disclosure notices to MSRC and Alibaba/Qwen are **not yet sent**~~ — **CLOSED 2026-08-19.**
+  Both sent (reported by the signer). No acknowledgement received from either vendor. The §8
+  obligation is to notify, not to obtain a response, so non-reply does not hold this open. Sent
+  *after* the repo went public rather than before — that ordering deviation stays recorded in
+  `reviews/disclosure-timing-decision-2026-08-17.md` and is not erased by this closure.
 - Stage 7's broader "Agent tasks" / Exit condition (assemble arXiv PDF, `CITATION.cff`,
   `v1.0-arxiv` git tag, `make release`) are outside the 4-item Gate 7 checklist itself and remain
   undone — `reviews/stage7.md` flagged this each round. Required before actual arXiv submission,
