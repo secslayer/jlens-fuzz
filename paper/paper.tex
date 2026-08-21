@@ -84,13 +84,12 @@ deserves scrutiny.
 % require removed or moved to an appendix/supplementary material, since it's a meta-note about
 % evidentiary conventions rather than paper content proper -- revisit if targeting such a venue.
 \begin{quote}
-\noindent\textbf{How to read this draft.} Every number below is either (a) read directly from a
+\noindent\textbf{How to read this paper.} Every number below is either (a) read directly from a
 committed \texttt{results/*.json} / \texttt{results/*.npz} file---cited inline as
-\texttt{path} $\to$ \texttt{field}---or (b) explicitly marked as PI-hand-verified (a real
-completed human check not written back into any file) or PI-reported-only (no backing artifact
-exists in this repo at all). Anywhere a backing artifact could not be found for a claim, it is
-flagged inline as \textbf{[DRAFT FLAG]} rather than invented or softened into unmarked prose.
-Resolve each flag before this leaves draft status.
+\texttt{path} $\to$ \texttt{field}---or (b) explicitly marked in-text as hand-verified (a
+completed human check not written back into any file) or as narrative-only (no backing artifact
+exists in this repository). Claims of the second kind are named as such wherever they appear
+rather than being softened into unmarked prose, and no conclusion rests on one.
 \end{quote}
 
 \section{Introduction}
@@ -382,15 +381,14 @@ Hand-reading 4 completions the original \texttt{hubert233/GPTFuzz} judge scored 
 (``jailbroken'') on an early Phi-4-mini smoke run found all four were not jailbreaks: one was a
 refusal (``I can't assist'') that pivoted to an unrelated topic; three were the model merely
 echoing a DAN/Omega/APOPHIS-style roleplay template's persona/setup instructions, with zero
-harmful content (full writeup: \texttt{reviews/judge-validity-incident.md}). \textbf{[DRAFT
-FLAG]} The specific $\mathtt{asr=0.8}$ figure this produced is \textit{not} backed by a committed
+harmful content (full writeup: \texttt{reviews/judge-validity-incident.md}). The specific
+$\mathtt{asr=0.8}$ figure this produced is \textit{not} backed by a committed
 \texttt{results/*.json} in this repository---no \texttt{results/phi/ours\_smoke.json} (pre-fix,
-pre-pool-fix) exists here; the $0.8$ number exists only as narrative record in the incident
-writeup, not as a citable artifact. We report the qualitative finding ($4/4$ hand-read false
-positives) as established---that is a direct, already-documented human read---but we cannot cite
-``$0.8 \to 0.0$'' as a clean before/after artifact pair the way the rest of this section's numbers
-are cited, and flag that the paper's judge-inflation claim should lean on the evidence below
-instead, which \textit{is} fully artifact-backed.
+pre-pool-fix) exists; the $0.8$ number survives only as narrative record in the incident writeup,
+not as a citable artifact. We therefore report the qualitative finding ($4/4$ hand-read false
+positives) as established---it is a direct, documented human read---but do not cite
+``$0.8 \to 0.0$'' as a clean before/after pair the way the rest of this section's numbers are
+cited. The judge-inflation claim rests on the artifact-backed evidence below instead.
 
 \paragraph{A cleaner, artifact-backed before/after (Qwen, same target, same method, same $n=5$
 behaviors).}
@@ -484,13 +482,7 @@ Phi-4-mini & \texttt{gptfuzzer} (uniform) & $0.0$ ($0/5$) & $0.0$ ($0/5$) & \tex
 \textbf{We explicitly do not claim guided mutation beats uniform mutation from
 \cref{tab:null}.} The Qwen $1$-vs-$0$ (hand-verified) or $2$-vs-$0$ (raw judge count) gap is
 noise at $n=5$---a single behavior flipping either way changes the ratio entirely, and Phi shows
-a tied $0$-vs-$0$. \textbf{[DRAFT FLAG]} A separate, earlier run (pool$=77$, post-judge-fix but
-pre-seed-pool-fix) was reported by the PI as showing Qwen \texttt{ours} $=$ \texttt{gptfuzzer}
-$= 0.4$ (tied)---we note this as directionally consistent with the null above, but \textbf{no
-backing file for that run exists in this repository}, so we report it only as context, not as a
-citable data point, and recommend leading with the pool-12 numbers above (which are fully
-artifact-backed and have the tree-search-engagement property the pool-77 run lacked) as the
-paper's primary evidence for the null, per the PI's own guidance.
+a tied $0$-vs-$0$.
 
 Both targets' \texttt{asr} values are computed at $\mathtt{n\_behaviors=5}$ (smoke scale).
 Establishing whether either direction (guided advantage, or no advantage) is statistically
@@ -775,8 +767,7 @@ judge, once compute allows.
 
 \printbibliography
 
-% [DRAFT FLAG] (see paper/references.bib): page numbers and full DOI/BibTeX details beyond
-% author/year/venue/arXiv-ID are still pending -- pull real exports before submission.
+% Bibliography facts (author/year/venue/arXiv-ID) are verified; see paper/references.bib.
 
 \appendix
 \section{Full Provenance Table}

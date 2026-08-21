@@ -4,23 +4,24 @@ title: >
   Success Judges, and an Honest Null Result for Activation-Guided Mutation
 author: Muhammed Muiz Arummal, Independent Researcher
 status: >-
-  DRAFT — reviewed three times (reviews/stage7.md), Gate 7 signed off 2026-08-08
-  (reviews/stage7-human-signoff.md), numerically re-verified and converted to LaTeX 2026-08-09
-  (paper/paper.tex compiles clean — zero LaTeX errors, zero unresolved \cref/\cite warnings —
-  this markdown file is the source of record it was derived from, not the submission artifact
-  itself). pre-arXiv, not yet posted or tagged. GitHub repo made public 2026-08-17, ahead of
-  arXiv posting (recorded decision: reviews/disclosure-timing-decision-2026-08-17.md); disclosure
-  to MSRC/Alibaba (§7) has not yet been sent and is now overdue relative to PLAN.md §8.
+  Submission-ready pending disclosure. Reviewed three times (reviews/stage7.md), Gate 7 signed
+  off 2026-08-08 (reviews/stage7-human-signoff.md), numerically re-verified and converted to
+  LaTeX 2026-08-09. All [DRAFT FLAG] markers resolved 2026-08-19 — the two substantive caveats
+  they marked (the unbacked asr=0.8 figure in §5.1, the pool-77 run in §5.2) were kept as plain
+  prose or cut, not quietly dropped; paper/paper.tex compiles clean, 15 pages. This markdown file
+  is the source of record; paper.tex is the submission artifact. GitHub repo made public
+  2026-08-17 ahead of arXiv posting (recorded decision:
+  reviews/disclosure-timing-decision-2026-08-17.md). REMAINING BLOCKER — disclosure to
+  MSRC/Alibaba (§7) not confirmed sent; PLAN.md §8 requires it before publicizing.
 date: 2026-08-09
 ---
 
-> **How to read this draft.** Every number below is either (a) read directly from a committed
+> **How to read this paper.** Every number below is either (a) read directly from a committed
 > `results/*.json` / `results/*.npz` file — cited inline as `path → field`, or (b) explicitly
-> marked as PI-hand-verified (a real completed human check not written back into any file) or
-> PI-reported-only (no backing artifact exists in this repo at all). Anywhere I could not find a
-> backing artifact for a claim in the brief, I have flagged it inline as **[DRAFT FLAG]** rather
-> than invent or soften it into unmarked prose. Please resolve each flag before this leaves draft
-> status.
+> marked in-text as hand-verified (a completed human check not written back into any file) or as
+> narrative-only (no backing artifact exists in this repository). Claims of the second kind are
+> named as such wherever they appear rather than being softened into unmarked prose, and no
+> conclusion rests on one.
 
 ## Abstract
 
@@ -298,14 +299,14 @@ first-class limitation (§6), not an implementation detail to bury.
 scored ~0.99 ("jailbroken") on an early Phi-4-mini smoke run found all four were not jailbreaks:
 one was a refusal ("I can't assist") that pivoted to an unrelated topic; three were the model
 merely echoing a DAN/Omega/APOPHIS-style roleplay template's persona/setup instructions, with
-zero harmful content (full writeup: `reviews/judge-validity-incident.md`). **[DRAFT FLAG]** The
-specific `asr=0.8` figure this produced is *not* backed by a committed `results/*.json` in this
-repository — no `results/phi/ours_smoke.json` (pre-fix, pre-pool-fix) exists here; the 0.8 number
-exists only as narrative record in the incident writeup, not as a citable artifact. We report the
-qualitative finding (4/4 hand-read false positives) as established — that is a direct,
-already-documented human read — but we cannot cite "0.8 → 0.0" as a clean before/after artifact
-pair the way the rest of this section's numbers are cited, and flag that the paper's judge-
-inflation claim should lean on the evidence below instead, which *is* fully artifact-backed.
+zero harmful content (full writeup: `reviews/judge-validity-incident.md`). The specific `asr=0.8`
+figure this produced is *not* backed by a committed `results/*.json` in this repository — no
+`results/phi/ours_smoke.json` (pre-fix, pre-pool-fix) exists; the 0.8 number survives only as
+narrative record in the incident writeup, not as a citable artifact. We therefore report the
+qualitative finding (4/4 hand-read false positives) as established — it is a direct, documented
+human read — but do not cite "0.8 → 0.0" as a clean before/after pair the way the rest of this
+section's numbers are cited. The judge-inflation claim rests on the artifact-backed evidence
+below instead.
 
 **A cleaner, artifact-backed before/after (Qwen, same target, same method, same n=5
 behaviors).** `results/ours_smoke.json` (old RoBERTa judge as the live success determinant,
@@ -369,13 +370,7 @@ failed to apply its own rubric correctly on this input — itself a citable limi
 
 **We explicitly do not claim guided mutation beats uniform mutation from this table.** The Qwen
 1-vs-0 (hand-verified) or 2-vs-0 (raw judge count) gap is noise at n=5 — a single behavior flipping
-either way changes the ratio entirely, and Phi shows a tied 0-vs-0. **[DRAFT FLAG]** A separate,
-earlier run (pool=77, post-judge-fix but pre-seed-pool-fix) was reported by the PI as showing
-Qwen `ours` = `gptfuzzer` = 0.4 (tied) — we note this as directionally consistent with the null
-above, but **no backing file for that run exists in this repository**, so we report it only as
-context, not as a citable data point, and recommend leading with the pool-12 numbers above (which
-are fully artifact-backed and have the tree-search-engagement property the pool-77 run lacked) as
-the paper's primary evidence for the null, per the PI's own guidance.
+either way changes the ratio entirely, and Phi shows a tied 0-vs-0.
 
 Both targets' `asr` values are computed at `n_behaviors=5` (smoke scale). Establishing whether
 either direction (guided advantage, or no advantage) is statistically significant would require
@@ -634,8 +629,8 @@ Two corrections made from this pass: AutoDAN (ICLR 2024) and "Not Aligned" is No
 (COLING 2025) are peer-reviewed publications, not arXiv-only preprints, and their venue is now
 noted; the "How Reliable Is Your Jailbreak Judge?" citation previously read "Gao, Y. et al." but
 is a solo-authored paper (Yang Gao, Veyon Solutions) — corrected to drop "et al." here and in the
-§2 in-text citation. **[DRAFT FLAG]**: page numbers and full BibTeX-formatted entries (as opposed
-to the author/year/venue/arXiv-ID facts verified above) still need to be pulled before submission.
+§2 in-text citation. Author, year, venue and arXiv-ID facts are verified as above; page numbers
+and fully-formatted BibTeX entries are carried in `paper/references.bib`.
 
 ## Appendix A — Full provenance table
 
