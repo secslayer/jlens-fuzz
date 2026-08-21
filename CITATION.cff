@@ -5,9 +5,9 @@
 #   - `license`: omitted entirely. No LICENSE file exists in this repo yet (see README.md's own
 #     "Do not treat this repo as licensed for reuse until one is added" note) -- adding an SPDX
 #     license id here without a matching LICENSE file would be a false claim. Add both together.
-#   - `authors[0]`'s given-names/family-names split below is a best-effort parse of the name as
-#     signed in reviews/stage7-human-signoff.md ("muhammed muiz arummal") -- correct it if the
-#     split (given: "Muhammed Muiz", family: "Arummal") is wrong.
+#   - `authors[0]` uses CFF's `name:` (entity form) rather than a given/family split: the author
+#     publishes as "Muhammed Muiz", a mononym-style byline with no separate family name, so
+#     forcing a split would invent one. Matches paper.tex's \author{} exactly.
 #   - `affiliation`: set to "Independent Researcher" per the PI's confirmation.
 #   - `preferred-citation.url`/`identifiers`: arXiv ID is not yet assigned (PLAN.md §11/§7,
 #     paper/paper.md §7 -- disclosure to MSRC/Alibaba is planned for arXiv-posting time, not sent
@@ -24,8 +24,7 @@ title: >-
   Jailbreak Success Judges, and an Honest Null Result for Activation-Guided Mutation
 type: software
 authors:
-  - given-names: Muhammed Muiz
-    family-names: Arummal
+  - name: "Muhammed Muiz"
     email: abdulmuiz3570@gmail.com
     affiliation: "Independent Researcher"
 repository-code: "https://github.com/secslayer/jlens-fuzz"
@@ -53,8 +52,7 @@ preferred-citation:
     Judge-Shaped, Not Harm-Shaped: A Persistent Measurement-Validity Failure in Jailbreak Success
     Judges, and an Honest Null Result for Activation-Guided Mutation
   authors:
-    - given-names: Muhammed Muiz
-      family-names: Arummal
+    - name: "Muhammed Muiz"
       email: abdulmuiz3570@gmail.com
       affiliation: "Independent Researcher"
   year: 2026

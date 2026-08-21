@@ -2,7 +2,7 @@
 title: >
   Judge-Shaped, Not Harm-Shaped: A Persistent Measurement-Validity Failure in Jailbreak
   Success Judges, and an Honest Null Result for Activation-Guided Mutation
-author: Muhammed Muiz Arummal, Independent Researcher
+author: Muhammed Muiz, Independent Researcher
 status: >-
   Submission-ready pending disclosure. Reviewed three times (reviews/stage7.md), Gate 7 signed
   off 2026-08-08 (reviews/stage7-human-signoff.md), numerically re-verified and converted to
